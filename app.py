@@ -2,12 +2,11 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-# Secure Configuration
+# This tells the system to use the v1beta API which is more stable for Flash
 genai.configure(api_key=st.secrets["GEMINI_KEY"])
-model = genai.GenerativeModel('models/gemini-1.5-flash')
+model = genai.GenerativeModel(model_name="gemini-1.5-flash")
 
-st.set_page_config(page_title="AXOM Global", layout="wide", page_icon="🚀")
-
+# Header and rest of the code remains the same...
 with st.sidebar:
     st.title("Settings")
     subject = st.selectbox("Target Subject", ["IGCSE English 0510", "Physics", "Chemistry", "Mathematics"])
