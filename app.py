@@ -2,7 +2,7 @@ import streamlit as st
 
 st.set_page_config(page_title="AXOM - Global Financial Monitor", layout="wide")
 
-st.title("🚀 AXOM: Senior Examiner AI")
+st.title(" AXOM: Senior Examiner AI")
 st.write("Ibrahim, the engine is officially live on the Cloud!")
 
 st.sidebar.success("Subscription Status: $20 Premium")
