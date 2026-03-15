@@ -2,20 +2,19 @@ import streamlit as st
 from PIL import Image
 
 # Secure Configuration
-model = genai.GenerativeModel('gemini-1.5-flash')
 
 st.set_page_config(page_title="AXOM Global", layout="wide", page_icon="🚀")
 
 # Sidebar - Business & Subject Controls
 with st.sidebar:
     st.title("Settings")
-    subject = st.selectbox("Target Subject", ["IGCSE English 0510", "Physics", "Chemistry", "Mathematics"])
+    subject = st.selectbox("Target Subject", ["English", "Physics", "Chemistry", "Mathematics"])
     mode = st.radio("Grading Mode", ["Strict (Cambridge)", "Feedback Only", "Quick Score"])
     st.divider()
     st.write("📈 **Profit Rate:** $0.998 / page")
     st.write("🌍 **Status:** Global Cloud Live")
 
-st.title("🚀 AXOM: Senior Examiner AI")
+st.title("AXOM: Senior Examiner AI")
 
 # Main Interface
 col1, col2 = st.columns([1, 1])
