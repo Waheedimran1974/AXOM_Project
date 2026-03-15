@@ -2,7 +2,6 @@ import streamlit as st
 from PIL import Image
 
 # Secure Configuration
-genai.configure(api_key=st.secrets["GEMINI_KEY"])
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 st.set_page_config(page_title="AXOM Global", layout="wide", page_icon="🚀")
