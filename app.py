@@ -1,7 +1,6 @@
 import streamlit as st
 
 # Securely grab the key you saved in 'Secrets'
-genai.configure(api_key=st.secrets["GEMINI_KEY"])
 
 st.set_page_config(page_title="AXOM Global", layout="wide", page_icon="🚀")
 
