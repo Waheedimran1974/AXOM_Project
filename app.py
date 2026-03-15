@@ -1,34 +1,55 @@
 import streamlit as st
+import google.generativeai as genai
+from PIL import Image
 
-# Securely grab the key you saved in 'Secrets'
+# Secure Configuration
+genai.configure(api_key=st.secrets["GEMINI_KEY"])
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 st.set_page_config(page_title="AXOM Global", layout="wide", page_icon="🚀")
 
-# Header Section
-st.title("🚀 AXOM: Senior Examiner AI")
-st.subheader("Global Financial Monitoring & Grading")
-
-# Sidebar for Business Controls
+# Sidebar - Business & Subject Controls
 with st.sidebar:
-    st.header("Control Panel")
+    st.title("Settings")
     subject = st.selectbox("Target Subject", ["IGCSE English 0510", "Physics", "Chemistry", "Mathematics"])
     mode = st.radio("Grading Mode", ["Strict (Cambridge)", "Feedback Only", "Quick Score"])
     st.divider()
-    st.write("📈 **Current Profit Rate:** $0.998 / page")
+    st.write("📈 **Profit Rate:** $0.998 / page")
+    st.write("🌍 **Status:** Global Cloud Live")
+
+st.title("🚀 AXOM: Senior Examiner AI")
 
 # Main Interface
-col1, col2 = st.columns(2)
+col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.markdown("### 📄 Upload Student Paper")
-    uploaded_file = st.file_uploader("Drop PDF or Image here", type=['pdf', 'png', 'jpg'])
+    st.markdown("### 📄 Upload Student Work")
+    uploaded_file = st.file_uploader("Upload Image/PDF of Exam", type=['png', 'jpg', 'jpeg', 'pdf'])
     
-with col2:
-    st.markdown("### 📊 Live Monitoring")
     if uploaded_file:
-        st.success(f"File '{uploaded_file.name}' received.")
-        if st.button("RUN SENIOR EXAMINER AI"):
-            st.info(f"Analyzing {subject} standards... please wait.")
-            # AI Logic will process here in the next step
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Student Submission", use_container_width=True)
+
+with col2:
+    st.markdown("### 📊 AI Analysis Results")
+    if uploaded_file and st.button("RUN SENIOR EXAMINER AI"):
+        with st.spinner(f"Applying {subject} Marking Schemes..."):
+            try:
+                # The "Ruthless" Prompt Logic
+                prompt = f"""
+                You are a Senior Cambridge Examiner for {subject}. 
+                Analyze this student paper. 
+                1. Provide a total score based on standard marking schemes.
+                2. List specific mistakes.
+                3. Give 3 'Examiner Tips' for the student to reach an A*.
+                Format the output clearly with headers.
+                """
+                
+                response = model.generate_content([prompt, image])
+                st.markdown(response.text)
+                st.success("Analysis Complete. Profit Logged.")
+                
+            except Exception as e:
+                st.error(f"Engine Error: {e}")
     else:
-        st.warning("Awaiting input for analysis.")
+        st.info("Awaiting file upload to begin monitoring.")
