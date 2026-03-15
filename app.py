@@ -50,3 +50,7 @@ with col2:
                 st.error(f"Engine Error: {e}")
     else:
         st.info("Awaiting file upload to begin monitoring.")
+streamlit
+google-generativeai
+python-dotenv
+Pillow
