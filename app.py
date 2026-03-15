@@ -2,49 +2,43 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-# This tells the system to use the v1beta API which is more stable for Flash
-genai.configure(api_key=st.secrets["GEMINI_KEY"])
-model = genai.GenerativeModel(model_name="gemini-1.5-flash")
+# 1. Setup the Secret and Model
+try:
+    # Use the specific key name from your Streamlit Secrets
+    API_KEY = st.secrets["GEMINI_KEY"]
+    genai.configure(api_key=API_KEY)
+    # Using the most stable direct model name
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    st.error(f"Configuration Error: {e}")
 
-# Header and rest of the code remains the same...
-with st.sidebar:
-    st.title("Settings")
-    subject = st.selectbox("Target Subject", ["IGCSE English 0510", "Physics", "Chemistry", "Mathematics"])
-    mode = st.radio("Grading Mode", ["Strict (Cambridge)", "Feedback Only", "Quick Score"])
-    st.divider()
-    st.write("📈 **Profit Rate:** $0.998 / page")
-
+st.set_page_config(page_title="AXOM Global", layout="wide")
 st.title("🚀 AXOM: Senior Examiner AI")
 
-col1, col2 = st.columns([1, 1])
+# 2. File Upload Logic
+uploaded_file = st.file_uploader("Upload Exam PDF or Image", type=['pdf', 'png', 'jpg', 'jpeg'])
 
-with col1:
-    st.markdown("### 📄 Upload Student Work")
-    uploaded_file = st.file_uploader("Upload Image/PDF", type=['png', 'jpg', 'jpeg', 'pdf'])
-    
-    content_to_analyze = None
-    
-    if uploaded_file:
-        if uploaded_file.type == "application/pdf":
-            # If it's a PDF, we tell Gemini to read the raw data
-            content_to_analyze = {"mime_type": "application/pdf", "data": uploaded_file.read()}
-            st.success("PDF Exam Paper Loaded successfully.")
-        else:
-            # If it's an Image, we show it and prepare it
-            image = Image.open(uploaded_file)
-            st.image(image, caption="Student Submission", use_container_width=True)
-            content_to_analyze = image
-
-with col2:
-    st.markdown("### 📊 AI Analysis Results")
-    if content_to_analyze and st.button("RUN SENIOR EXAMINER AI"):
-        with st.spinner(f"Analyzing {subject} standards..."):
+if uploaded_file:
+    st.success("File received by AXOM Engine.")
+    if st.button("RUN SENIOR EXAMINER ANALYSIS"):
+        with st.spinner("Analyzing against Cambridge standards..."):
             try:
-                prompt = f"You are a Senior Cambridge Examiner for {subject}. Analyze this paper, give a total score, and provide 3 tips for A*."
+                # Prepare content based on file type
+                if uploaded_file.type == "application/pdf":
+                    content = [{"mime_type": "application/pdf", "data": uploaded_file.read()}]
+                else:
+                    img = Image.open(uploaded_file)
+                    content = [img]
                 
-                # We send the specific content (Image or PDF) to the AI
-                response = model.generate_content([prompt, content_to_analyze])
-                st.markdown(response.text)
-                st.success("Analysis Complete.")
+                # The Professional Grading Prompt
+                prompt = "You are a Senior IGCSE Examiner. Provide a score and 3 A* tips."
+                
+                # The AI Call
+                response = model.generate_content([prompt] + content)
+                st.markdown("### 📊 Examiner Report")
+                st.write(response.text)
+                st.success("Profit Logged: $0.998")
+                
             except Exception as e:
-                st.error(f"Analysis Failed: {e}")
+                # This catches if it's still a 404 or a key issue
+                st.error(f"AI Engine Report: {e}")
