@@ -1,5 +1,4 @@
 import streamlit as st
-import google.generativeai as genai
 
 # Securely grab the key you saved in 'Secrets'
 genai.configure(api_key=st.secrets["GEMINI_KEY"])
