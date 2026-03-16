@@ -48,7 +48,7 @@ def apply_harsh_marking(uploaded_file, ai_json_instructions):
 # 3. USER INTERFACE (UI)
 # ==========================================
 st.set_page_config(page_title="AXOM Global", layout="wide")
-st.title("AXOM: Senior Examiner AI")
+st.title("AXOM: Senior Examiner")
 
 with st.sidebar:
     st.header("Submission History")
@@ -87,9 +87,9 @@ if uploaded_file:
         
         status_updates = [
             "Initializing AXOM Neural Engine...",
-            "Fetching IGCSE Mark Scheme...",
+            "Fetching Mark Scheme For Better Accurracy...",
             "Scanning syntax and morphology...",
-            "Comparing vocabulary to Band 9 descriptors...",
+            "Comparing vocabulary to High-class descriptors...",
             "Calculating deductive penalties...",
             "Generating Senior Lecturer feedback..."
         ]
@@ -99,7 +99,7 @@ if uploaded_file:
             with timer_placeholder.container():
                 st.markdown(f"### {msg}")
                 st.info(f"Analysis in progress: {30 - i}s remaining. Do not refresh this page.")
-                st.caption("ADVERTISEMENT: Prepare for your IELTS with AXOM Premium. No wait times. 100% Accuracy.")
+                st.caption("ADVERTISEMENT: Prepare for your EXAMS with AXOM Premium. No wait times. 100% Accuracy.")
             
             progress_bar.progress((i + 1) / 30)
             time.sleep(1)
