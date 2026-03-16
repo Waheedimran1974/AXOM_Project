@@ -36,17 +36,9 @@ def apply_harsh_marking(uploaded_file, ai_json_instructions):
             for page in doc:
                 text_instances = page.search_for(action["text"])
                 for inst in text_instances:
-                    # Choose color based on action
-                    # (1, 0, 0) is Red | (0, 0.5, 0) is Green
-                    stroke_color = (1, 0, 0) if action["type"] == "error" else (0, 0.5, 0)
-                    
                     if action["action"] == "strike_through":
                         line_mid = (inst.y0 + inst.y1) / 2
-                        annot = page.add_line_annot(fitz.Point(inst.x0, line_mid), fitz.Point(inst.x1, line_mid))
-                        annot.set_colors(stroke=stroke_color)
-                        annot.update()
-                        
-                        # Add the comment in the same color
+                        page.add_line_annot(fitz.Point(inst.x0, line_mid), fitz.Point(inst.x1, line_mid))
                         page.add_text_annot(fitz.Point(inst.x1 + 5, inst.y0), action["comment"])
         return doc.write()
     except:
@@ -81,7 +73,15 @@ uploaded_file = st.file_uploader("Upload Exam Paper (PDF)", type=['pdf'])
 if uploaded_file:
     rigor = st.select_slider("Select Marking Rigor", options=["Standard", "Harsh"])
     
-    if st.button("RUN AXOM ANALYSIS"):
+    # --- MANDATORY TERMS OF SERVICE ---
+    st.markdown("---")
+    st.write("#### Terms of Service")
+    tos_agreed = st.checkbox("I understand that AXOM provides AI-assisted marking for educational purposes. I agree to the 30-second processing time.")
+
+    # The button is only clickable if tos_agreed is True
+    run_button = st.button("RUN AXOM ANALYSIS", disabled=not tos_agreed)
+    
+    if run_button:
         timer_placeholder = st.empty()
         progress_bar = st.progress(0)
         
@@ -140,14 +140,11 @@ if uploaded_file:
                     "report": report_text
                 })
 
-                # --- THE REPORT VIEW ---
                 st.markdown("---")
                 st.markdown("### Examiner Report")
-                st.markdown(f"<div id='printable-report'>{report_text}</div>", unsafe_allow_html=True)
+                st.write(report_text)
                 
-                # --- PRINT BUTTON ---
-                st.button("Print This Report", on_click=lambda: st.write('<script>window.print();</script>', unsafe_allow_html=True))
-                
+                # Apply Red Pen
                 marked_pdf = apply_harsh_marking(uploaded_file, correction_list)
                 
                 if marked_pdf:
