@@ -9,7 +9,6 @@ import io
 # ==========================================
 # 1. CORE BRAIN: INITIALIZE AI
 # ==========================================
-# We use st.cache_resource so the model only loads ONCE, making it super fast.
 @st.cache_resource
 def load_axom_engine():
     try:
@@ -17,13 +16,12 @@ def load_axom_engine():
             return None, "Missing API Key in Streamlit Secrets."
         
         genai.configure(api_key=st.secrets["GEMINI_KEY"])
-        # Stable 2.0 Flash is the 2026 workhorse
+        # Stable 2.0 Flash engine
         model = genai.GenerativeModel('gemini-2.0-flash')
         return model, None
     except Exception as e:
         return None, str(e)
 
-# Initialize the model at the very beginning
 model, error_message = load_axom_engine()
 
 # ==========================================
@@ -54,67 +52,65 @@ st.set_page_config(page_title="AXOM Global", layout="wide")
 st.title("AXOM: Senior Examiner AI")
 
 if error_message:
-    st.error(f"❌ Engine Offline: {error_message}")
-    st.stop() # Stops the app here so 'model' is never called while undefined
+    st.error(f"Engine Offline: {error_message}")
+    st.stop()
 
 uploaded_file = st.file_uploader("Upload Exam Paper (PDF)", type=['pdf'])
 
 if uploaded_file:
-    # Mode selection
     rigor = st.select_slider("Select Marking Rigor", options=["Standard", "Harsh"])
     
     if st.button("RUN AXOM ANALYSIS"):
-        with st.spinner("Senior Lecturer Waheed Imran is reviewing..."):
-            
-            # THE 30-SECOND AD-GATE
-            progress = st.progress(0)
-            for i in range(100):
-                time.sleep(0.3)
-                progress.progress(i + 1)
-            
+        # Integrated Ad-Gate and Timer
+        timer_placeholder = st.empty()
+        progress_bar = st.progress(0)
+        
+        harsh_comments = [
+            "Analyzing your syntax... it is concerning.",
+            "Checking the mark scheme... you are making this easy for me.",
+            "Looking for complex vocabulary... still looking...",
+            "Evaluating your logic... have you read the prompt?",
+            "Finalizing the grade... do not get your hopes up."
+        ]
+
+        # 30-Second Countdown
+        for i in range(30):
+            comment = harsh_comments[i // 6]
+            timer_placeholder.markdown(f"#### {30 - i} seconds remaining... \n *{comment}*")
+            progress_bar.progress((i + 1) / 30)
+            time.sleep(1)
+        
+        timer_placeholder.empty()
+        progress_bar.empty()
+
+        with st.spinner("Finalizing report..."):
             try:
                 # 1. AI Analysis
                 pdf_parts = [{"mime_type": "application/pdf", "data": uploaded_file.getvalue()}]
-                prompt = f"You are Waheed Imran. Mark this paper in {rigor} mode. Give a grade and feedback."
+                prompt = (
+                    f"You are a Senior Lecturer. Mark this paper in {rigor} mode. "
+                    "Provide a grade and specific academic feedback. "
+                    "If errors are found, list them for a red-pen strike-through."
+                )
                 
-                # This is where the 'model' is called safely
                 response = model.generate_content([prompt] + pdf_parts)
                 
                 # 2. Display Report
-                st.markdown("### 📊 Examiner Report")
+                st.markdown("### Examiner Report")
                 st.write(response.text)
                 
-                # 3. Create Annotated PDF (Mocked for now)
+                # 3. Create Annotated PDF
+                # Mock data remains for stability until JSON parsing is implemented
                 mock_json = [{"action": "strike_through", "text": "swimmed", "comment": "Irregular verb error."}]
                 marked_pdf = apply_harsh_marking(uploaded_file, mock_json)
                 
                 if marked_pdf:
-                    st.download_button("📥 Download Annotated PDF", data=marked_pdf, file_name="AXOM_Marked.pdf")
+                    st.download_button(
+                        label="Download Annotated PDF", 
+                        data=marked_pdf, 
+                        file_name="AXOM_Marked.pdf",
+                        mime="application/pdf"
+                    )
                     
             except Exception as e:
                 st.error(f"Analysis failed: {e}")
-                # --- THE AD-GATE TIMER ---
-with st.spinner("Reviewing for mediocrity... Please wait."):
-    # 1. Create a placeholder for the countdown
-    timer_placeholder = st.empty()
-    progress_bar = st.progress(0)
-    
-    # 2. Random 'Harsh' Teacher comments to show while waiting
-    harsh_comments = [
-        "Analyzing your syntax... it's concerning.",
-        "Checking the mark scheme... you're making this easy for me.",
-        "Looking for complex vocabulary... still looking...",
-        "Evaluating your logic... have you read the prompt?",
-        "Finalizing the grade... don't get your hopes up."
-    ]
-
-    for i in range(30):
-        # Update the comment every 6 seconds
-        comment = harsh_comments[i // 6]
-        timer_placeholder.markdown(f"#### ⏳ {30 - i} seconds remaining... \n *{comment}*")
-        
-        # Update progress
-        progress_bar.progress((i + 1) / 30)
-        time.sleep(1) # Wait 1 second
-    
-    timer_placeholder.empty() # Clear the timer when done
