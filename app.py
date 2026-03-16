@@ -135,8 +135,7 @@ if uploaded_file:
     "carefully verify their data against the visual image provided. "
     "Check for accuracy in trends, percentages, and comparisons. "
     "Provide a Band score based on 'Task Response' and 'Cohesion'. "
-    "JSON_START ... JSON_END"
-)
+    "JSON_START ... JSON_END")
                 response = model.generate_content([prompt] + pdf_parts)
                 full_text = response.text
                 
