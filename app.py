@@ -16,7 +16,6 @@ def load_axom_engine():
             return None, "Missing API Key in Streamlit Secrets."
         
         genai.configure(api_key=st.secrets["GEMINI_KEY"])
-        # Stable 2.0 Flash engine
         model = genai.GenerativeModel('gemini-2.0-flash')
         return model, None
     except Exception as e:
@@ -61,7 +60,6 @@ if uploaded_file:
     rigor = st.select_slider("Select Marking Rigor", options=["Standard", "Harsh"])
     
     if st.button("RUN AXOM ANALYSIS"):
-        # Integrated Ad-Gate and Timer
         timer_placeholder = st.empty()
         progress_bar = st.progress(0)
         
@@ -73,7 +71,6 @@ if uploaded_file:
             "Finalizing the grade... do not get your hopes up."
         ]
 
-        # 30-Second Countdown
         for i in range(30):
             comment = harsh_comments[i // 6]
             timer_placeholder.markdown(f"#### {30 - i} seconds remaining... \n *{comment}*")
@@ -85,24 +82,38 @@ if uploaded_file:
 
         with st.spinner("Finalizing report..."):
             try:
-                # 1. AI Analysis
+                # 1. AI Analysis with JSON Extraction Logic
                 pdf_parts = [{"mime_type": "application/pdf", "data": uploaded_file.getvalue()}]
                 prompt = (
                     f"You are a Senior Lecturer. Mark this paper in {rigor} mode. "
-                    "Provide a grade and specific academic feedback. "
-                    "If errors are found, list them for a red-pen strike-through."
+                    "Provide a grade and academic feedback. "
+                    "At the very end of your response, provide a JSON list of errors for strike-throughs. "
+                    "Format: JSON_START "
+                    "[{\"action\": \"strike_through\", \"text\": \"word\", \"comment\": \"explanation\"}] "
+                    "JSON_END"
                 )
                 
                 response = model.generate_content([prompt] + pdf_parts)
+                full_text = response.text
                 
-                # 2. Display Report
+                # 2. Extract JSON from the response
+                correction_list = []
+                report_text = full_text
+
+                if "JSON_START" in full_text and "JSON_END" in full_text:
+                    try:
+                        report_text = full_text.split("JSON_START")[0]
+                        json_part = full_text.split("JSON_START")[1].split("JSON_END")[0]
+                        correction_list = json.loads(json_part.strip())
+                    except:
+                        correction_list = []
+
+                # 3. Display Report
                 st.markdown("### Examiner Report")
-                st.write(response.text)
+                st.write(report_text)
                 
-                # 3. Create Annotated PDF
-                # Mock data remains for stability until JSON parsing is implemented
-                mock_json = [{"action": "strike_through", "text": "swimmed", "comment": "Irregular verb error."}]
-                marked_pdf = apply_harsh_marking(uploaded_file, mock_json)
+                # 4. Create Annotated PDF using the AI's list
+                marked_pdf = apply_harsh_marking(uploaded_file, correction_list)
                 
                 if marked_pdf:
                     st.download_button(
