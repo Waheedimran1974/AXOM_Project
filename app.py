@@ -167,3 +167,19 @@ if uploaded_file:
                     
             except Exception as e:
                 st.error(f"Analysis failed: {e}")
+# ==========================================
+# 4. FOOTER
+# ==========================================
+st.markdown("---")
+footer_col1, footer_col2, footer_col3 = st.columns([1, 2, 1])
+
+with footer_col2:
+    st.markdown(
+        """
+        <div style='text-align: center; color: grey;'>
+            <p>© 2026 AXOM Global | Senior Examiner AI v2.0</p>
+            <p style='font-size: 0.8rem;'>Built for IGCSE & IELTS Academic Standards</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
