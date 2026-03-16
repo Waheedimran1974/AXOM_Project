@@ -14,7 +14,6 @@ def load_axom_engine():
     try:
         if "GEMINI_KEY" not in st.secrets:
             return None, "Missing API Key in Streamlit Secrets."
-        
         genai.configure(api_key=st.secrets["GEMINI_KEY"])
         model = genai.GenerativeModel('gemini-2.0-flash')
         return model, None
@@ -23,6 +22,10 @@ def load_axom_engine():
 
 model, error_message = load_axom_engine()
 
+# Initialize Session State for History
+if "history" not in st.session_state:
+    st.session_state.history = []
+
 # ==========================================
 # 2. THE HANDS: RED PEN PAINTER
 # ==========================================
@@ -30,7 +33,6 @@ def apply_harsh_marking(uploaded_file, ai_json_instructions):
     try:
         input_bytes = uploaded_file.getvalue()
         doc = fitz.open(stream=input_bytes, filetype="pdf")
-        
         for action in ai_json_instructions:
             for page in doc:
                 text_instances = page.search_for(action["text"])
@@ -39,7 +41,6 @@ def apply_harsh_marking(uploaded_file, ai_json_instructions):
                         line_mid = (inst.y0 + inst.y1) / 2
                         page.add_line_annot(fitz.Point(inst.x0, line_mid), fitz.Point(inst.x1, line_mid))
                         page.add_text_annot(fitz.Point(inst.x1 + 5, inst.y0), action["comment"])
-        
         return doc.write()
     except:
         return None
@@ -49,6 +50,24 @@ def apply_harsh_marking(uploaded_file, ai_json_instructions):
 # ==========================================
 st.set_page_config(page_title="AXOM Global", layout="wide")
 st.title("AXOM: Senior Examiner AI")
+
+# Sidebar: History Tab
+with st.sidebar:
+    st.header("Submission History")
+    
+    if not st.session_state.history:
+        st.write("No papers marked yet.")
+    else:
+        # Loop through history in reverse (newest first)
+        for idx, item in enumerate(reversed(st.session_state.history)):
+            st.write(f"**{item['filename']}**")
+            st.caption(f"Mode: {item['mode']} | {item['timestamp']}")
+            st.divider()
+        
+        # Clear History Button
+        if st.button("Clear History"):
+            st.session_state.history = []
+            st.rerun()
 
 if error_message:
     st.error(f"Engine Offline: {error_message}")
@@ -82,7 +101,6 @@ if uploaded_file:
 
         with st.spinner("Finalizing report..."):
             try:
-                # 1. AI Analysis with JSON Extraction Logic
                 pdf_parts = [{"mime_type": "application/pdf", "data": uploaded_file.getvalue()}]
                 prompt = (
                     f"You are a Senior Lecturer. Mark this paper in {rigor} mode. "
@@ -96,7 +114,6 @@ if uploaded_file:
                 response = model.generate_content([prompt] + pdf_parts)
                 full_text = response.text
                 
-                # 2. Extract JSON from the response
                 correction_list = []
                 report_text = full_text
 
@@ -108,18 +125,24 @@ if uploaded_file:
                     except:
                         correction_list = []
 
-                # 3. Display Report
+                # Add to History
+                st.session_state.history.append({
+                    "filename": uploaded_file.name,
+                    "mode": rigor,
+                    "timestamp": time.strftime("%H:%M:%S"),
+                    "report": report_text
+                })
+
                 st.markdown("### Examiner Report")
                 st.write(report_text)
                 
-                # 4. Create Annotated PDF using the AI's list
                 marked_pdf = apply_harsh_marking(uploaded_file, correction_list)
                 
                 if marked_pdf:
                     st.download_button(
                         label="Download Annotated PDF", 
                         data=marked_pdf, 
-                        file_name="AXOM_Marked.pdf",
+                        file_name=f"AXOM_Marked_{uploaded_file.name}",
                         mime="application/pdf"
                     )
                     
