@@ -129,12 +129,15 @@ if uploaded_file:
         with st.spinner("Finalizing report..."):
             try:
                 pdf_parts = [{"mime_type": "application/pdf", "data": uploaded_file.getvalue()}]
-               prompt = ( f"You are a Senior Lecturer. Mark this paper in {rigor} mode. "
+               prompt = 
+            ( 
+                f"You are a Senior Lecturer. Mark this paper in {rigor} mode. "
     "Special Instruction: If the student has described a graph or chart, "
     "carefully verify their data against the visual image provided. "
     "Check for accuracy in trends, percentages, and comparisons. "
     "Provide a Band score based on 'Task Response' and 'Cohesion'. "
-    "JSON_START ... JSON_END")
+    "JSON_START ... JSON_END"
+            )
                 response = model.generate_content([prompt] + pdf_parts)
                 full_text = response.text
                 
