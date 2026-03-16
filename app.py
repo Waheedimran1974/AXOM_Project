@@ -64,3 +64,15 @@ MARKING PROCESS:
   "text": "swimmed",
   "comment": "Irregular verb error. Use 'swam'. Band 2 penalty applied."
 }
+def get_system_prompt(mode):
+    base_persona = "You are Senior Lecturer Waheed Imran."
+    
+    if mode == "Harsh Mode":
+        return base_persona + """ 
+        MODE: HARSH. 
+        POLICY: Zero-tolerance for low-level vocabulary. 
+        CRITIQUE: Be brutal and direct. 
+        MARKING: Deductive only. Start at 100% and hunt for reasons to fail the candidate.
+        """
+    else:
+        return base_persona + "MODE: Standard. Provide balanced feedback."
