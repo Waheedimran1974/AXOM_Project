@@ -58,3 +58,9 @@ MARKING PROCESS:
 - Step 3: Calculate the final mark based on the threshold.
 - Step 4: Generate 'Red Pen' margin notes.
 """
+{
+  "action": "strike_through",
+  "color": "red",
+  "text": "swimmed",
+  "comment": "Irregular verb error. Use 'swam'. Band 2 penalty applied."
+}
