@@ -178,7 +178,7 @@ with footer_col2:
         """
         <div style='text-align: center; color: grey;'>
             <p>© 2026 AXOM Global | Senior Examiner AI v2.0</p>
-            <p style='font-size: 0.8rem;'>Built for IGCSE & IELTS Academic Standards</p>
+            <p style='font-size: 0.8rem;'>Built for IGCSE/O-LEVELS/A-LEVELS/IELTS & OTHER EXAMS Standards</p>
         </div>
         """,
         unsafe_allow_html=True
