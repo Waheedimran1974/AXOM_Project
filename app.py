@@ -85,7 +85,7 @@ if uploaded_file:
             "Initializing AXOM Neural Engine...",
             "Fetching IGCSE Mark Scheme...",
             "Scanning syntax and morphology...",
-            "Comparing vocabulary to Band 9 descriptors...",
+            "Comparing vocabulary to A* descriptors...",
             "Calculating deductive penalties...",
             "Generating Senior Lecturer feedback..."
         ]
