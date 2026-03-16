@@ -50,26 +50,19 @@ def apply_harsh_marking(uploaded_file, ai_json_instructions):
     except Exception as e:
         st.error(f"Red Pen Error: {e}")
         return None
-
 # ==========================================
-# 3. SETUP & ENGINE INITIALIZATION
+# 3. SETUP & SECURITY (STABLE 2026)
 # ==========================================
-st.set_page_config(page_title="AXOM Global", layout="wide", page_icon="🚀")
-
-# Header Section
-st.title("🚀 AXOM: Senior Examiner AI")
-st.markdown("### *Global Assessment Empire — Established 2026*")
-
 try:
-    # Fetching the Key from Streamlit Secrets (Safety First)
-    API_KEY = st.secrets["GEMINI_KEY"]
+    API_KEY = st.secrets["AIzaSyDiz22b_eQXkB4fQQ8rl4_AZ1gmPc7TXiw"]
     genai.configure(api_key=API_KEY)
     
-    # Using the 2026 Stable Gemini 3 Flash Model
-    model = genai.GenerativeModel('gemini-3-flash') 
+    # Using the Stable 2026 Workhorse: Gemini 2.0 Flash
+    # This model is optimized for PDF 'Vision' and Harsh Mode JSON
+    model = genai.GenerativeModel('gemini-2.0-flash') 
+    
 except Exception as e:
-    st.error("Missing API Key. Ensure 'GEMINI_KEY' is added to your Streamlit Cloud Secrets.")
-
+    st.error("Setup Error: Check your Streamlit Secrets for 'GEMINI_KEY'")
 # ==========================================
 # 4. THE USER INTERFACE (UI)
 # ==========================================
