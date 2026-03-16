@@ -1,1 +1,20 @@
+[theme]
+# Professional Navy Blue for buttons and sliders
+primaryColor = "#1E3A8A" 
 
+# Clean white for the main workspace
+backgroundColor = "#FFFFFF" 
+
+# Soft grey for the sidebar and secondary areas
+secondaryBackgroundColor = "#F3F4F6" 
+
+# High-contrast charcoal for all text
+textColor = "#111827" 
+
+# Serif font to give it a "University Exam" feel
+font = "serif"
+
+[server]
+# Ensures the app remains stable during processing
+enableCORS = false
+enableXsrfProtection = true
