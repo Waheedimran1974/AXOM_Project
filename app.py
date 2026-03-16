@@ -74,7 +74,16 @@ if uploaded_file:
     rigor = st.select_slider("Select Marking Rigor", options=["Standard", "Harsh"])
     
     # --- IMPROVED TERMS OF SERVICE SECTION ---
-    st.markdown("---")
+    st.markdown(
+    """
+    <div style='background-color: #001F3F; padding: 20px; border-radius: 10px; border-bottom: 5px solid #D4AF37;'>
+        <h1 style='color: white; text-align: center; margin: 0;'>AXOM GLOBAL</h1>
+        <p style='color: #D4AF37; text-align: center; font-weight: bold;'>SENIOR EXAMINER AI SYSTEM</p>
+    </div>
+    <br>
+    """,
+    unsafe_allow_html=True
+)
     with st.expander("View Full Terms of Service"):
         st.markdown("""
         **1. Nature of Service** AXOM provides automated, AI-generated feedback based on 2026 academic descriptors for educational purposes.
