@@ -15,7 +15,6 @@ def load_axom_engine():
         if "GEMINI_KEY" not in st.secrets:
             return None, "Missing API Key in Streamlit Secrets."
         genai.configure(api_key=st.secrets["GEMINI_KEY"])
-        # Using the stable 2.0 Flash engine
         model = genai.GenerativeModel('gemini-2.0-flash')
         return model, None
     except Exception as e:
@@ -23,7 +22,6 @@ def load_axom_engine():
 
 model, error_message = load_axom_engine()
 
-# Initialize Session State for History
 if "history" not in st.session_state:
     st.session_state.history = []
 
@@ -52,7 +50,6 @@ def apply_harsh_marking(uploaded_file, ai_json_instructions):
 st.set_page_config(page_title="AXOM Global", layout="wide")
 st.title("AXOM: Senior Examiner AI")
 
-# Sidebar: History Tab
 with st.sidebar:
     st.header("Submission History")
     if not st.session_state.history:
@@ -77,7 +74,6 @@ if uploaded_file:
     rigor = st.select_slider("Select Marking Rigor", options=["Standard", "Harsh"])
     
     if st.button("RUN AXOM ANALYSIS"):
-        # Professional Ad-Gate Interface
         timer_placeholder = st.empty()
         progress_bar = st.progress(0)
         
@@ -85,12 +81,11 @@ if uploaded_file:
             "Initializing AXOM Neural Engine...",
             "Fetching IGCSE Mark Scheme...",
             "Scanning syntax and morphology...",
-            "Comparing vocabulary to A* descriptors...",
+            "Comparing vocabulary to Band 9 descriptors...",
             "Calculating deductive penalties...",
             "Generating Senior Lecturer feedback..."
         ]
 
-        # 30-Second Countdown
         for i in range(30):
             msg = status_updates[i // 5]
             with timer_placeholder.container():
@@ -122,7 +117,6 @@ if uploaded_file:
                 correction_list = []
                 report_text = full_text
 
-                # Split JSON from Report
                 if "JSON_START" in full_text and "JSON_END" in full_text:
                     try:
                         report_text = full_text.split("JSON_START")[0]
@@ -131,7 +125,6 @@ if uploaded_file:
                     except:
                         correction_list = []
 
-                # Add to Session History
                 st.session_state.history.append({
                     "filename": uploaded_file.name,
                     "mode": rigor,
@@ -139,10 +132,14 @@ if uploaded_file:
                     "report": report_text
                 })
 
+                # --- THE REPORT VIEW ---
+                st.markdown("---")
                 st.markdown("### Examiner Report")
-                st.write(report_text)
+                st.markdown(f"<div id='printable-report'>{report_text}</div>", unsafe_allow_html=True)
                 
-                # Apply Red Pen
+                # --- PRINT BUTTON ---
+                st.button("Print This Report", on_click=lambda: st.write('<script>window.print();</script>', unsafe_allow_html=True))
+                
                 marked_pdf = apply_harsh_marking(uploaded_file, correction_list)
                 
                 if marked_pdf:
