@@ -1,20 +1,19 @@
 [theme]
-# Professional Navy Blue for buttons and sliders
-primaryColor = "#1E3A8A" 
+# Gold for primary buttons and highlights
+primaryColor = "#D4AF37" 
 
-# Clean white for the main workspace
+# Pure White for the main workspace background
 backgroundColor = "#FFFFFF" 
 
-# Soft grey for the sidebar and secondary areas
-secondaryBackgroundColor = "#F3F4F6" 
+# Deep Midnight Blue for the sidebar
+secondaryBackgroundColor = "#001F3F" 
 
-# High-contrast charcoal for all text
-textColor = "#111827" 
+# Deep Black for maximum readability of the report text
+textColor = "#000000" 
 
-# Serif font to give it a "University Exam" feel
+# Serif font for a formal exam look
 font = "serif"
 
 [server]
-# Ensures the app remains stable during processing
 enableCORS = false
 enableXsrfProtection = true
