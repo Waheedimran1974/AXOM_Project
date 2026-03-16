@@ -93,3 +93,28 @@ if uploaded_file:
                     
             except Exception as e:
                 st.error(f"Analysis failed: {e}")
+                # --- THE AD-GATE TIMER ---
+with st.spinner("Reviewing for mediocrity... Please wait."):
+    # 1. Create a placeholder for the countdown
+    timer_placeholder = st.empty()
+    progress_bar = st.progress(0)
+    
+    # 2. Random 'Harsh' Teacher comments to show while waiting
+    harsh_comments = [
+        "Analyzing your syntax... it's concerning.",
+        "Checking the mark scheme... you're making this easy for me.",
+        "Looking for complex vocabulary... still looking...",
+        "Evaluating your logic... have you read the prompt?",
+        "Finalizing the grade... don't get your hopes up."
+    ]
+
+    for i in range(30):
+        # Update the comment every 6 seconds
+        comment = harsh_comments[i // 6]
+        timer_placeholder.markdown(f"#### ⏳ {30 - i} seconds remaining... \n *{comment}*")
+        
+        # Update progress
+        progress_bar.progress((i + 1) / 30)
+        time.sleep(1) # Wait 1 second
+    
+    timer_placeholder.empty() # Clear the timer when done
