@@ -36,9 +36,17 @@ def apply_harsh_marking(uploaded_file, ai_json_instructions):
             for page in doc:
                 text_instances = page.search_for(action["text"])
                 for inst in text_instances:
+                    # Choose color based on action
+                    # (1, 0, 0) is Red | (0, 0.5, 0) is Green
+                    stroke_color = (1, 0, 0) if action["type"] == "error" else (0, 0.5, 0)
+                    
                     if action["action"] == "strike_through":
                         line_mid = (inst.y0 + inst.y1) / 2
-                        page.add_line_annot(fitz.Point(inst.x0, line_mid), fitz.Point(inst.x1, line_mid))
+                        annot = page.add_line_annot(fitz.Point(inst.x0, line_mid), fitz.Point(inst.x1, line_mid))
+                        annot.set_colors(stroke=stroke_color)
+                        annot.update()
+                        
+                        # Add the comment in the same color
                         page.add_text_annot(fitz.Point(inst.x1 + 5, inst.y0), action["comment"])
         return doc.write()
     except:
