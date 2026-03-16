@@ -15,6 +15,7 @@ def load_axom_engine():
         if "GEMINI_KEY" not in st.secrets:
             return None, "Missing API Key in Streamlit Secrets."
         genai.configure(api_key=st.secrets["GEMINI_KEY"])
+        # Using the stable 2.0 Flash engine
         model = genai.GenerativeModel('gemini-2.0-flash')
         return model, None
     except Exception as e:
@@ -54,17 +55,14 @@ st.title("AXOM: Senior Examiner AI")
 # Sidebar: History Tab
 with st.sidebar:
     st.header("Submission History")
-    
     if not st.session_state.history:
         st.write("No papers marked yet.")
     else:
-        # Loop through history in reverse (newest first)
-        for idx, item in enumerate(reversed(st.session_state.history)):
+        for item in reversed(st.session_state.history):
             st.write(f"**{item['filename']}**")
             st.caption(f"Mode: {item['mode']} | {item['timestamp']}")
             st.divider()
         
-        # Clear History Button
         if st.button("Clear History"):
             st.session_state.history = []
             st.rerun()
@@ -79,20 +77,27 @@ if uploaded_file:
     rigor = st.select_slider("Select Marking Rigor", options=["Standard", "Harsh"])
     
     if st.button("RUN AXOM ANALYSIS"):
+        # Professional Ad-Gate Interface
         timer_placeholder = st.empty()
         progress_bar = st.progress(0)
         
-        harsh_comments = [
-            "Analyzing your syntax... it is concerning.",
-            "Checking the mark scheme... you are making this easy for me.",
-            "Looking for complex vocabulary... still looking...",
-            "Evaluating your logic... have you read the prompt?",
-            "Finalizing the grade... do not get your hopes up."
+        status_updates = [
+            "Initializing AXOM Neural Engine...",
+            "Fetching IGCSE Mark Scheme...",
+            "Scanning syntax and morphology...",
+            "Comparing vocabulary to Band 9 descriptors...",
+            "Calculating deductive penalties...",
+            "Generating Senior Lecturer feedback..."
         ]
 
+        # 30-Second Countdown
         for i in range(30):
-            comment = harsh_comments[i // 6]
-            timer_placeholder.markdown(f"#### {30 - i} seconds remaining... \n *{comment}*")
+            msg = status_updates[i // 5]
+            with timer_placeholder.container():
+                st.markdown(f"### {msg}")
+                st.info(f"Analysis in progress: {30 - i}s remaining. Do not refresh this page.")
+                st.caption("ADVERTISEMENT: Prepare for your IELTS with AXOM Premium. No wait times. 100% Accuracy.")
+            
             progress_bar.progress((i + 1) / 30)
             time.sleep(1)
         
@@ -117,6 +122,7 @@ if uploaded_file:
                 correction_list = []
                 report_text = full_text
 
+                # Split JSON from Report
                 if "JSON_START" in full_text and "JSON_END" in full_text:
                     try:
                         report_text = full_text.split("JSON_START")[0]
@@ -125,7 +131,7 @@ if uploaded_file:
                     except:
                         correction_list = []
 
-                # Add to History
+                # Add to Session History
                 st.session_state.history.append({
                     "filename": uploaded_file.name,
                     "mode": rigor,
@@ -136,6 +142,7 @@ if uploaded_file:
                 st.markdown("### Examiner Report")
                 st.write(report_text)
                 
+                # Apply Red Pen
                 marked_pdf = apply_harsh_marking(uploaded_file, correction_list)
                 
                 if marked_pdf:
