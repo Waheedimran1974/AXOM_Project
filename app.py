@@ -1,6 +1,32 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
+import streamlit as st
+import fitz  # This is the PyMuPDF "Red Pen" tool
+import time
+import json
+# (You will also import your Gemini API tool here)
+def apply_harsh_marking(original_pdf, ai_json_instructions):
+    doc = fitz.open(stream=original_pdf.read(), filetype="pdf")
+    
+    for action in ai_json_instructions:
+        # Loop through every page to find the error
+        for page in doc:
+            text_instances = page.search_for(action["text"])
+            for inst in text_instances:
+                if action["action"] == "strike_through":
+                    # Draw Red Line
+                    line_mid = (inst.y0 + inst.y1) / 2
+                    page.add_line_annot(fitz.Point(inst.x0, line_mid), fitz.Point(inst.x1, line_mid))
+                    # Add Harsh Comment
+                    page.add_text_annot(fitz.Point(inst.x1 + 5, inst.y0), action["comment"])
+    
+    return doc.write() # Returns the "Red Pen" version
+    HARSH_PROMPT = """
+You are Senior Lecturer Waheed Imran in HARSH MODE. 
+Identify grammar/vocab errors and output ONLY valid JSON in this format:
+[{"action": "strike_through", "text": "wrong_word", "comment": "Brutal feedback"}]
+"""
 
 # 1. Setup with the 2026 Stable Model
 try:
@@ -70,3 +96,25 @@ def get_system_prompt(mode):
         """
     else:
         return base_persona + "MODE: Standard. Provide balanced feedback."
+        st.title("AXOM: Senior Examiner Marking")
+
+uploaded_file = st.file_uploader("Upload your IGCSE/IELTS Paper", type="pdf")
+
+if uploaded_file:
+    if st.button("Mark My Paper (Harsh Mode)"):
+        # MISSION: THE AD-GATE
+        with st.spinner("Harsh Mode Engaged... Reviewing for mediocrity..."):
+            
+            # This simulates your 30-second Ad-Gate timer
+            time.sleep(30) 
+            
+            # 1. Send PDF to Gemini with HARSH_PROMPT
+            # 2. Get the JSON back (Example below)
+            mock_json = [{"action": "strike_through", "text": "swimmed", "comment": "Band 2 Error. Use 'swam'."}]
+            
+            # 3. Use the Painter to mark the PDF
+            marked_pdf = apply_harsh_marking(uploaded_file, mock_json)
+            
+            # 4. Give the student the result
+            st.success("Paper Marked. It was... disappointing.")
+            st.download_button("Download Marked Paper", data=marked_pdf, file_name="AXOM_Marked.pdf")
