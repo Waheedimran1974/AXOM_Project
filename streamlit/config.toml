@@ -1,0 +1,19 @@
+[theme]
+# Gold for primary buttons and highlights
+primaryColor = "#D4AF37" 
+
+# Pure White for the main workspace background
+backgroundColor = "#FFFFFF" 
+
+# Deep Midnight Blue for the sidebar
+secondaryBackgroundColor = "#001F3F" 
+
+# Deep Black for maximum readability of the report text
+textColor = "#000000" 
+
+# Serif font for a formal exam look
+font = "serif"
+
+[server]
+enableCORS = false
+enableXsrfProtection = true
