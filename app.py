@@ -106,7 +106,7 @@ if st.session_state.role == "Student":
     uploaded_file = st.file_uploader("Upload Exam Paper (PDF)", type=['pdf'])
     if uploaded_file:
         rigor = st.select_slider("Select Marking Rigor", options=["Standard", "Harsh"])
-        tos_agreed = st.checkbox("I agree to the Halal-Ads & Data Privacy Terms")
+        tos_agreed = st.checkbox("I agree to the Ads & Data Privacy Terms")
         if st.button("RUN AXOM ANALYSIS", disabled=not tos_agreed):
             progress_bar = st.progress(0)
             for i in range(10):
