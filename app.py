@@ -5,7 +5,24 @@ import fitz  # PyMuPDF
 import time
 import json
 import io
+import cv2
+import numpy as np
 
+def axom_pro_scanner(image_file):
+    # Convert uploaded file to OpenCV format
+    file_bytes = np.asarray(bytearray(image_file.read()), dtype=np.uint8)
+    img = cv2.imdecode(file_bytes, 1)
+    
+    # Step 1: Grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Step 2: Adaptive Thresholding (The B&W "Pro" look)
+    # This removes shadows and makes text "Pop"
+    pro_img = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                   cv2.THRESH_BINARY, 11, 2)
+    
+    # Convert back to PIL for Gemini
+    return Image.fromarray(pro_img)
 # ==========================================
 # 1. CORE BRAIN: INITIALIZE AI
 # ==========================================
