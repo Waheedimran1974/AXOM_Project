@@ -4,5 +4,4 @@ PyMuPDF
 Pillow
 opencv-python-headless
 numpy
-SpeechRecognition
-pydub
+gTTS
