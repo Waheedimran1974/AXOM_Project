@@ -7,8 +7,8 @@ import json
 import io
 import cv2
 import numpy as np
-import speech_recognition as sr
-from pydub import AudioSegment
+from gtts import gTTS
+import base64
 
 # ==========================================
 # 1. CORE BRAIN & UTILITIES
@@ -19,6 +19,16 @@ def axom_pro_scanner(image_file):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     pro_img = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
     return Image.fromarray(pro_img)
+
+def speak_text(text):
+    """Converts text to speech and returns an audio player."""
+    tts = gTTS(text=text, lang='en', tld='co.uk') # British Accent for IGCSE
+    fp = io.BytesIO()
+    tts.write_to_fp(fp)
+    # Convert to base64 for streamlit audio player
+    b64 = base64.b64encode(fp.getvalue()).decode()
+    md = f'<audio autoplay="true" src="data:audio/mp3;base64,{b64}">'
+    st.markdown(md, unsafe_allow_html=True)
 
 @st.cache_resource
 def load_axom_engine():
@@ -33,39 +43,18 @@ def load_axom_engine():
 
 model, error_message = load_axom_engine()
 
-if "history" not in st.session_state:
-    st.session_state.history = []
-if 'role' not in st.session_state:
-    st.session_state.role = None
+# Initialize Session States
+if "history" not in st.session_state: st.session_state.history = []
+if 'role' not in st.session_state: st.session_state.role = None
+if "chat_history" not in st.session_state: st.session_state.chat_history = []
 
 # ==========================================
-# 2. THE HANDS: RED PEN PAINTER
-# ==========================================
-def apply_harsh_marking(uploaded_file, ai_json_instructions):
-    try:
-        input_bytes = uploaded_file.getvalue()
-        doc = fitz.open(stream=input_bytes, filetype="pdf")
-        for action in ai_json_instructions:
-            for page in doc:
-                text_instances = page.search_for(action["text"])
-                for inst in text_instances:
-                    if action["action"] == "strike_through":
-                        line_mid = (inst.y0 + inst.y1) / 2
-                        annot = page.add_line_annot(fitz.Point(inst.x0, line_mid), fitz.Point(inst.x1, line_mid))
-                        annot.set_colors(stroke=(1, 0, 0)) 
-                        annot.update()
-                        page.add_text_annot(fitz.Point(inst.x1 + 5, inst.y0), action["comment"])
-        return doc.write()
-    except:
-        return None
-
-# ==========================================
-# 3. IDENTITY & LOGIN GATE
+# 2. IDENTITY & LOGIN GATE
 # ==========================================
 st.set_page_config(page_title="AXOM Global", layout="wide")
 
 if not st.session_state.role:
-    st.markdown("<h1 style='text-align: center;'>🚀 Welcome to AXOM</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>🚀 AXOM COMMAND CENTER</h1>", unsafe_allow_html=True)
     st.subheader("Select Your Account Type to Begin")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -76,85 +65,78 @@ if not st.session_state.role:
         if st.button("👪 Parent Portal"): st.session_state.role = "Parent"
     st.stop()
 
-# Sidebar
+# Sidebar Logic
 with st.sidebar:
-    st.success(f"Mode: {st.session_state.role}")
-    if st.button("Logout / Change Role"):
+    st.success(f"User: {st.session_state.role}")
+    if st.button("Logout"):
         st.session_state.role = None
+        st.session_state.chat_history = []
         st.rerun()
     st.divider()
-    st.header("Submission History")
-    if not st.session_state.history:
-        st.write("No papers marked yet.")
-    else:
-        for item in reversed(st.session_state.history):
-            st.write(f"**{item['filename']}**")
-            st.caption(f"{item['timestamp']}")
+    st.header("Marking History")
+    for item in reversed(st.session_state.history):
+        st.write(f"📝 {item['filename']}")
 
 # ==========================================
-# 4. STUDENT PORTAL (MARKING + SPEAKING)
+# 3. THE STUDENT PORTAL
 # ==========================================
 if st.session_state.role == "Student":
-    st.markdown("<div style='background-color: #001F3F; padding: 20px; border-radius: 10px; border-bottom: 5px solid #D4AF37;'><h1 style='color: white; text-align: center; margin: 0;'>AXOM STUDENT PORTAL</h1><p style='color: #D4AF37; text-align: center; font-weight: bold;'>SENIOR EXAMINER AI SYSTEM</p></div><br>", unsafe_allow_html=True)
+    # Branding
+    st.markdown("<div style='background-color: #001F3F; padding: 15px; border-radius: 10px; border-left: 10px solid #00ff41;'><h1 style='color: white; margin: 0;'>STUDENT HUB</h1></div>", unsafe_allow_html=True)
 
-    if error_message:
-        st.error(f"Engine Offline: {error_message}")
-        st.stop()
+    tab1, tab2 = st.tabs(["📝 Written Exam Marking", "🎙️ Live Speaking Lab"])
 
-    # --- PART 1: PDF MARKING ---
-    st.header("📝 Written Exam Marking")
-    uploaded_file = st.file_uploader("Upload Exam Paper (PDF)", type=['pdf'])
-    if uploaded_file:
-        rigor = st.select_slider("Select Marking Rigor", options=["Standard", "Harsh"])
-        tos_agreed = st.checkbox("I agree to the Ads & Data Privacy Terms")
-        if st.button("RUN AXOM ANALYSIS", disabled=not tos_agreed):
-            progress_bar = st.progress(0)
-            for i in range(10):
-                progress_bar.progress((i + 1) / 10)
-                time.sleep(0.3)
-            with st.spinner("Analyzing..."):
-                try:
+    # --- TAB 1: PDF MARKING ---
+    with tab1:
+        uploaded_file = st.file_uploader("Upload Exam Paper (PDF)", type=['pdf'])
+        if uploaded_file:
+            rigor = st.select_slider("Marking Rigor", options=["Standard", "Harsh"])
+            if st.button("RUN ANALYSIS"):
+                with st.spinner("AXOM Engine Scanning..."):
                     pdf_parts = [{"mime_type": "application/pdf", "data": uploaded_file.getvalue()}]
-                    prompt = f"Mark this paper in {rigor} mode. Format: JSON_START [{{'action': 'strike_through', 'text': 'word', 'comment': 'explanation'}}] JSON_END"
+                    prompt = f"Mark this paper in {rigor} mode. Give clear Band scores."
                     response = model.generate_content([prompt] + pdf_parts)
-                    report_text = response.text.split("JSON_START")[0] if "JSON_START" in response.text else response.text
-                    st.session_state.history.append({"filename": uploaded_file.name, "timestamp": time.strftime("%H:%M:%S")})
                     st.markdown("### Examiner Report")
-                    st.write(report_text)
-                except Exception as e:
-                    st.error(f"Failed: {e}")
+                    st.write(response.text)
+                    st.session_state.history.append({"filename": uploaded_file.name})
 
-    # --- PART 2: SPEAKING LAB ---
-    st.markdown("---")
-    st.header("🎙️ AXOM Speaking Lab")
-    questions = ["Describe a place you visited recently.", "How will technology change education?", "Benefits of learning languages?"]
-    current_q = st.selectbox("Choose a Practice Topic:", questions)
-    audio_file = st.file_uploader("Upload your Voice Recording (WAV/MP3)", type=['wav', 'mp3'])
+    # --- TAB 2: INTERACTIVE SPEAKING ---
+    with tab2:
+        st.header("🤖 Live AI Examiner")
+        st.write("The AI will speak. Use your device's 'Dictation' or Type to respond.")
+        
+        # Initialize Chat Session if empty
+        if not st.session_state.chat_history:
+            initial_msg = "Hello! I am your AXOM Examiner. Today we will practice your speaking. Are you ready to begin?"
+            st.session_state.chat_history.append({"role": "assistant", "content": initial_msg})
+            speak_text(initial_msg)
 
-    if audio_file:
-        with st.spinner("Analyzing your fluency..."):
-            try:
-                audio = AudioSegment.from_file(audio_file)
-                audio.export("temp_voice.wav", format="wav")
-                r = sr.Recognizer()
-                with sr.AudioFile("temp_voice.wav") as source:
-                    audio_data = r.record(source)
-                    student_speech = r.recognize_google(audio_data)
-                    st.info(f"**Transcribed Speech:** {student_speech}")
-                    prompt = f"You are a Senior IELTS Examiner. The student said: '{student_speech}' for question '{current_q}'. Analyze Band Score, Fluency, and Grammar."
-                    speaking_response = model.generate_content(prompt)
-                    st.success("### Examiner Feedback")
-                    st.write(speaking_response.text)
-            except Exception as e:
-                st.error(f"Audio Error: {e}")
+        # Display Chat
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.write(msg["content"])
+
+        # Input logic
+        if user_input := st.chat_input("Your response..."):
+            st.session_state.chat_history.append({"role": "user", "content": user_input})
+            with st.chat_message("user"): st.write(user_input)
+            
+            with st.chat_message("assistant"):
+                # Use Gemini to generate a response as an examiner
+                chat = model.start_chat(history=[{"role": m["role"], "parts": [m["content"]]} for m in st.session_state.chat_history[:-1]])
+                response = chat.send_message(user_input)
+                ai_text = response.text
+                st.write(ai_text)
+                st.session_state.chat_history.append({"role": "assistant", "content": ai_text})
+                speak_text(ai_text)
 
 # ==========================================
-# 5. OTHER PORTALS
+# 4. TEACHER & PARENT (Next Sprints)
 # ==========================================
 elif st.session_state.role == "Teacher":
     st.title("👨‍🏫 Teacher Dashboard")
-    st.write("Coming Soon: Class Analytics and Handwriting Clone.")
+    st.info("Module 1: Handwriting Scanner - Coming tonight.")
 
 elif st.session_state.role == "Parent":
     st.title("👪 Parent Dashboard")
-    st.write("Coming Soon: Grade Predictor and Progress Tracking.")
+    st.info("Module 1: Weekly Progress Tracker - Coming tonight.")
