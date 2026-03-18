@@ -78,6 +78,55 @@ if not st.session_state.role:
     
     with col1:
         if st.button("🎓 Student Portal"): st.session_state.role = "Student"
+            import speech_recognition as sr
+from pydub import AudioSegment
+
+# --- AI SPEAKING EXAMINER UI ---
+st.markdown("---")
+st.header("🎙️ AXOM Speaking Lab")
+st.write("Record your answer to a mock exam question to receive a Band Score.")
+
+# Mock Question Generator
+questions = [
+    "Describe a place you visited recently. Why did you like it?",
+    "Do you think technology is making education better? Explain.",
+    "What are the benefits of learning a second language?",
+    "How do you think the environment will change in the next 50 years?"
+]
+current_q = st.selectbox("Choose a Practice Topic:", questions)
+
+# Voice Input Logic
+audio_file = st.file_uploader("Upload your Voice Recording (WAV/MP3)", type=['wav', 'mp3'])
+
+if audio_file:
+    with st.spinner("AXOM is listening and analyzing..."):
+        # Convert to WAV if needed (Gemini/SpeechRec prefers WAV)
+        audio = AudioSegment.from_file(audio_file)
+        audio.export("temp_voice.wav", format="wav")
+        
+        # Initialize Recognizer
+        r = sr.Recognizer()
+        with sr.AudioFile("temp_voice.wav") as source:
+            audio_data = r.record(source)
+            try:
+                # Transcribe speech
+                student_speech = r.recognize_google(audio_data)
+                st.info(f"**Transcribed Speech:** {student_speech}")
+                
+                # --- GEMINI FEEDBACK ---
+                prompt = (
+                    f"You are a Senior IELTS/IGCSE Speaking Examiner. "
+                    f"The student was asked: '{current_q}'. "
+                    f"Analyze their answer: '{student_speech}'. "
+                    f"Provide: 1. Band Score (1-9), 2. Fluency Check, 3. Vocabulary Improvements, 4. Grammar Corrections."
+                )
+                
+                speaking_response = model.generate_content(prompt)
+                st.success("### Examiner Feedback")
+                st.write(speaking_response.text)
+                
+            except Exception as e:
+                st.error(f"Could not process audio: {e}")
     with col2:
         if st.button("👨‍🏫 Teacher Portal"): st.session_state.role = "Teacher"
     with col3:
