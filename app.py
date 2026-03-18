@@ -7,25 +7,19 @@ import json
 import io
 import cv2
 import numpy as np
+import speech_recognition as sr
+from pydub import AudioSegment
 
+# ==========================================
+# 1. CORE BRAIN & UTILITIES
+# ==========================================
 def axom_pro_scanner(image_file):
-    # Convert uploaded file to OpenCV format
     file_bytes = np.asarray(bytearray(image_file.read()), dtype=np.uint8)
     img = cv2.imdecode(file_bytes, 1)
-    
-    # Step 1: Grayscale
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    # Step 2: Adaptive Thresholding (The B&W "Pro" look)
-    # This removes shadows and makes text "Pop"
-    pro_img = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                   cv2.THRESH_BINARY, 11, 2)
-    
-    # Convert back to PIL for Gemini
+    pro_img = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
     return Image.fromarray(pro_img)
-# ==========================================
-# 1. CORE BRAIN: INITIALIZE AI
-# ==========================================
+
 @st.cache_resource
 def load_axom_engine():
     try:
@@ -39,14 +33,13 @@ def load_axom_engine():
 
 model, error_message = load_axom_engine()
 
-# --- Initialize Session States ---
 if "history" not in st.session_state:
     st.session_state.history = []
 if 'role' not in st.session_state:
     st.session_state.role = None
 
 # ==========================================
-# 2. THE HANDS: RED PEN PAINTER (Your Logic)
+# 2. THE HANDS: RED PEN PAINTER
 # ==========================================
 def apply_harsh_marking(uploaded_file, ai_json_instructions):
     try:
@@ -67,7 +60,7 @@ def apply_harsh_marking(uploaded_file, ai_json_instructions):
         return None
 
 # ==========================================
-# 3. IDENTITY & ROLE SELECTION (The New Part)
+# 3. IDENTITY & LOGIN GATE
 # ==========================================
 st.set_page_config(page_title="AXOM Global", layout="wide")
 
@@ -75,71 +68,20 @@ if not st.session_state.role:
     st.markdown("<h1 style='text-align: center;'>🚀 Welcome to AXOM</h1>", unsafe_allow_html=True)
     st.subheader("Select Your Account Type to Begin")
     col1, col2, col3 = st.columns(3)
-    
     with col1:
         if st.button("🎓 Student Portal"): st.session_state.role = "Student"
-            import speech_recognition as sr
-from pydub import AudioSegment
-
-# --- AI SPEAKING EXAMINER UI ---
-st.markdown("---")
-st.header("🎙️ AXOM Speaking Lab")
-st.write("Record your answer to a mock exam question to receive a Band Score.")
-
-# Mock Question Generator
-questions = [
-    "Describe a place you visited recently. Why did you like it?",
-    "Do you think technology is making education better? Explain.",
-    "What are the benefits of learning a second language?",
-    "How do you think the environment will change in the next 50 years?"
-]
-current_q = st.selectbox("Choose a Practice Topic:", questions)
-
-# Voice Input Logic
-audio_file = st.file_uploader("Upload your Voice Recording (WAV/MP3)", type=['wav', 'mp3'])
-
-if audio_file:
-    with st.spinner("AXOM is listening and analyzing..."):
-        # Convert to WAV if needed (Gemini/SpeechRec prefers WAV)
-        audio = AudioSegment.from_file(audio_file)
-        audio.export("temp_voice.wav", format="wav")
-        
-        # Initialize Recognizer
-        r = sr.Recognizer()
-        with sr.AudioFile("temp_voice.wav") as source:
-            audio_data = r.record(source)
-            try:
-                # Transcribe speech
-                student_speech = r.recognize_google(audio_data)
-                st.info(f"**Transcribed Speech:** {student_speech}")
-                
-                # --- GEMINI FEEDBACK ---
-                prompt = (
-                    f"You are a Senior IELTS/IGCSE Speaking Examiner. "
-                    f"The student was asked: '{current_q}'. "
-                    f"Analyze their answer: '{student_speech}'. "
-                    f"Provide: 1. Band Score (1-9), 2. Fluency Check, 3. Vocabulary Improvements, 4. Grammar Corrections."
-                )
-                
-                speaking_response = model.generate_content(prompt)
-                st.success("### Examiner Feedback")
-                st.write(speaking_response.text)
-                
-            except Exception as e:
-                st.error(f"Could not process audio: {e}")
     with col2:
         if st.button("👨‍🏫 Teacher Portal"): st.session_state.role = "Teacher"
     with col3:
         if st.button("👪 Parent Portal"): st.session_state.role = "Parent"
-    st.stop() # Stops the app here until a role is picked
+    st.stop()
 
-# --- Sidebar for Logout & History ---
+# Sidebar
 with st.sidebar:
     st.success(f"Mode: {st.session_state.role}")
     if st.button("Logout / Change Role"):
         st.session_state.role = None
         st.rerun()
-    
     st.divider()
     st.header("Submission History")
     if not st.session_state.history:
@@ -150,72 +92,69 @@ with st.sidebar:
             st.caption(f"{item['timestamp']}")
 
 # ==========================================
-# 4. MAIN INTERFACE (Your Marking Logic)
+# 4. STUDENT PORTAL (MARKING + SPEAKING)
 # ==========================================
 if st.session_state.role == "Student":
-    # Custom Branding Header
-    st.markdown(
-        """
-        <div style='background-color: #001F3F; padding: 20px; border-radius: 10px; border-bottom: 5px solid #D4AF37;'>
-            <h1 style='color: white; text-align: center; margin: 0;'>AXOM STUDENT PORTAL</h1>
-            <p style='color: #D4AF37; text-align: center; font-weight: bold;'>SENIOR EXAMINER AI SYSTEM</p>
-        </div>
-        <br>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown("<div style='background-color: #001F3F; padding: 20px; border-radius: 10px; border-bottom: 5px solid #D4AF37;'><h1 style='color: white; text-align: center; margin: 0;'>AXOM STUDENT PORTAL</h1><p style='color: #D4AF37; text-align: center; font-weight: bold;'>SENIOR EXAMINER AI SYSTEM</p></div><br>", unsafe_allow_html=True)
 
     if error_message:
         st.error(f"Engine Offline: {error_message}")
         st.stop()
 
+    # --- PART 1: PDF MARKING ---
+    st.header("📝 Written Exam Marking")
     uploaded_file = st.file_uploader("Upload Exam Paper (PDF)", type=['pdf'])
-
     if uploaded_file:
         rigor = st.select_slider("Select Marking Rigor", options=["Standard", "Harsh"])
-        
-        with st.expander("View Full Terms of Service"):
-            st.markdown("1. Nature of Service: Automated Feedback...") # Shortened for space
-        
         tos_agreed = st.checkbox("I agree to the Halal-Ads & Data Privacy Terms")
-        run_button = st.button("RUN AXOM ANALYSIS", disabled=not tos_agreed)
-        
-        if run_button:
-            # --- PROGRESS BAR LOGIC (From your code) ---
+        if st.button("RUN AXOM ANALYSIS", disabled=not tos_agreed):
             progress_bar = st.progress(0)
-            status_updates = ["Initializing...", "Scanning...", "Generating Feedback..."]
-            for i in range(15): # Shortened to 15s for faster testing
-                progress_bar.progress((i + 1) / 15)
-                time.sleep(0.5)
-            
-            # --- AI GENERATION LOGIC ---
-            with st.spinner("Finalizing report..."):
+            for i in range(10):
+                progress_bar.progress((i + 1) / 10)
+                time.sleep(0.3)
+            with st.spinner("Analyzing..."):
                 try:
                     pdf_parts = [{"mime_type": "application/pdf", "data": uploaded_file.getvalue()}]
-                    prompt = (f"Mark this paper in {rigor} mode. Format: JSON_START "
-                              "[{\"action\": \"strike_through\", \"text\": \"word\", \"comment\": \"explanation\"}] JSON_END")
-                    
+                    prompt = f"Mark this paper in {rigor} mode. Format: JSON_START [{{'action': 'strike_through', 'text': 'word', 'comment': 'explanation'}}] JSON_END"
                     response = model.generate_content([prompt] + pdf_parts)
-                    full_text = response.text
-                    
-                    # (Extraction logic from your code)
-                    report_text = full_text.split("JSON_START")[0] if "JSON_START" in full_text else full_text
-                    
-                    st.session_state.history.append({
-                        "filename": uploaded_file.name,
-                        "timestamp": time.strftime("%H:%M:%S")
-                    })
-
+                    report_text = response.text.split("JSON_START")[0] if "JSON_START" in response.text else response.text
+                    st.session_state.history.append({"filename": uploaded_file.name, "timestamp": time.strftime("%H:%M:%S")})
                     st.markdown("### Examiner Report")
                     st.write(report_text)
-                    
                 except Exception as e:
-                    st.error(f"Analysis failed: {e}")
+                    st.error(f"Failed: {e}")
 
+    # --- PART 2: SPEAKING LAB ---
+    st.markdown("---")
+    st.header("🎙️ AXOM Speaking Lab")
+    questions = ["Describe a place you visited recently.", "How will technology change education?", "Benefits of learning languages?"]
+    current_q = st.selectbox("Choose a Practice Topic:", questions)
+    audio_file = st.file_uploader("Upload your Voice Recording (WAV/MP3)", type=['wav', 'mp3'])
+
+    if audio_file:
+        with st.spinner("Analyzing your fluency..."):
+            try:
+                audio = AudioSegment.from_file(audio_file)
+                audio.export("temp_voice.wav", format="wav")
+                r = sr.Recognizer()
+                with sr.AudioFile("temp_voice.wav") as source:
+                    audio_data = r.record(source)
+                    student_speech = r.recognize_google(audio_data)
+                    st.info(f"**Transcribed Speech:** {student_speech}")
+                    prompt = f"You are a Senior IELTS Examiner. The student said: '{student_speech}' for question '{current_q}'. Analyze Band Score, Fluency, and Grammar."
+                    speaking_response = model.generate_content(prompt)
+                    st.success("### Examiner Feedback")
+                    st.write(speaking_response.text)
+            except Exception as e:
+                st.error(f"Audio Error: {e}")
+
+# ==========================================
+# 5. OTHER PORTALS
+# ==========================================
 elif st.session_state.role == "Teacher":
     st.title("👨‍🏫 Teacher Dashboard")
-    st.write("Coming in the next Sprint: Handwriting Clone & Class Stats.")
+    st.write("Coming Soon: Class Analytics and Handwriting Clone.")
 
 elif st.session_state.role == "Parent":
     st.title("👪 Parent Dashboard")
-    st.write("Coming in the next Sprint: Student Progress & Grade Predictor.")
+    st.write("Coming Soon: Grade Predictor and Progress Tracking.")
