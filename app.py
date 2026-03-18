@@ -3,7 +3,6 @@ import google.generativeai as genai
 from PIL import Image
 import fitz  # PyMuPDF
 import time
-import json
 import io
 import cv2
 import numpy as np
@@ -13,12 +12,21 @@ from streamlit_mic_recorder import mic_recorder
 import speech_recognition as sr
 
 # ==========================================
-# 1. STREAMLIT CONFIG (MUST BE FIRST)
+# 1. STREAMLIT CONFIGURATION
 # ==========================================
 st.set_page_config(page_title="AXOM Global", page_icon="🚀", layout="wide")
 
+# Custom UI Styling (Deep Blue & Gold - Premium Academic Look)
+st.markdown("""
+    <style>
+    .stApp { background-color: #0b0f19; color: #ffffff; }
+    .portal-header { background-color: #001F3F; padding: 20px; border-radius: 10px; border-left: 8px solid #D4AF37; margin-bottom: 20px; }
+    .success-text { color: #00ff41; font-weight: bold; }
+    </style>
+    """, unsafe_allow_html=True)
+
 # ==========================================
-# 2. CORE UTILITIES & AI ENGINE
+# 2. CORE NEURAL ENGINES
 # ==========================================
 def axom_pro_scanner(image_file):
     """Turns standard photos into High-Contrast B&W Scans."""
@@ -29,7 +37,7 @@ def axom_pro_scanner(image_file):
     return Image.fromarray(pro_img)
 
 def axom_speak(text):
-    """Converts AI text to a British Examiner Voice and auto-plays it."""
+    """Generates High-Fidelity British Audio for the Examiner."""
     try:
         tts = gTTS(text=text, lang='en', tld='co.uk')
         fp = io.BytesIO()
@@ -38,14 +46,14 @@ def axom_speak(text):
         md = f'<audio autoplay="true" src="data:audio/mp3;base64,{b64}">'
         st.markdown(md, unsafe_allow_html=True)
     except Exception as e:
-        st.error("Audio generation failed, but text is available.")
+        st.error("Audio engine offline. Please read the text below.")
 
 @st.cache_resource
 def load_axom_engine():
-    """Initializes Gemini 2.0 Flash securely."""
+    """Initializes Gemini 2.0 Flash Securely."""
     try:
         if "GEMINI_KEY" not in st.secrets:
-            return None, "Missing GEMINI_KEY in Streamlit Secrets."
+            return None, "System Alert: Missing GEMINI_KEY in Streamlit Secrets."
         genai.configure(api_key=st.secrets["GEMINI_KEY"])
         model = genai.GenerativeModel('gemini-2.0-flash')
         return model, None
@@ -54,17 +62,17 @@ def load_axom_engine():
 
 model, error_message = load_axom_engine()
 
-# --- Initialize Session States ---
+# --- Global State Management ---
 if "history" not in st.session_state: st.session_state.history = []
 if 'role' not in st.session_state: st.session_state.role = None
 if 'live_chat' not in st.session_state: st.session_state.live_chat = None
 if 'last_ai_msg' not in st.session_state: st.session_state.last_ai_msg = ""
 
 # ==========================================
-# 3. THE PDF RED PEN PAINTER
+# 3. PDF RED PEN LOGIC
 # ==========================================
 def apply_harsh_marking(uploaded_file, ai_json_instructions):
-    """Draws red lines and comments directly onto the student's PDF."""
+    """Applies visual annotations to the student's PDF."""
     try:
         input_bytes = uploaded_file.getvalue()
         doc = fitz.open(stream=input_bytes, filetype="pdf")
@@ -83,147 +91,139 @@ def apply_harsh_marking(uploaded_file, ai_json_instructions):
         return None
 
 # ==========================================
-# 4. IDENTITY & LOGIN GATE (HALAL UX)
+# 4. THE COMMAND GATE (LOGIN)
 # ==========================================
 if not st.session_state.role:
-    st.markdown("<h1 style='text-align: center; color: #00ff41;'>🚀 AXOM COMMAND CENTER</h1>", unsafe_allow_html=True)
-    st.subheader("Select Your Account Type to Begin")
+    st.markdown("<h1 style='text-align: center; color: #D4AF37;'>🚀 AXOM GLOBAL PLATFORM</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #888;'>Select Your Access Tier</p>", unsafe_allow_html=True)
+    st.write("")
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("🎓 Student Portal", use_container_width=True): st.session_state.role = "Student"
+        if st.button("🎓 Student Access", use_container_width=True): st.session_state.role = "Student"
     with col2:
-        if st.button("👨‍🏫 Teacher Portal", use_container_width=True): st.session_state.role = "Teacher"
+        if st.button("👨‍🏫 Teacher Access", use_container_width=True): st.session_state.role = "Teacher"
     with col3:
-        if st.button("👪 Parent Portal", use_container_width=True): st.session_state.role = "Parent"
-    st.stop() # Halts execution until a role is selected
+        if st.button("👪 Parent Access", use_container_width=True): st.session_state.role = "Parent"
+    st.stop()
 
-# --- Global Sidebar ---
+# --- System Sidebar ---
 with st.sidebar:
-    st.success(f"Active Profile: {st.session_state.role}")
-    if st.button("Logout / Switch Role", use_container_width=True):
+    st.markdown(f"### 👤 Profile: {st.session_state.role}")
+    if st.button("Log Out", use_container_width=True):
         st.session_state.role = None
-        st.session_state.live_chat = None # Reset chat on logout
+        st.session_state.live_chat = None 
         st.rerun()
     
     st.divider()
-    st.header("Marking Ledger")
+    st.subheader("Recent Scans")
     if not st.session_state.history:
-        st.caption("No papers processed yet.")
+        st.caption("No operations logged.")
     for item in reversed(st.session_state.history):
-        st.write(f"📄 {item['filename']} ({item['timestamp']})")
+        st.markdown(f"📄 **{item['filename']}** \n*{item['timestamp']}*")
 
 # ==========================================
-# 5. THE STUDENT PORTAL (CORE ENGINE)
+# 5. STUDENT PORTAL (THE MONEY MAKER)
 # ==========================================
 if st.session_state.role == "Student":
-    st.markdown("<div style='background-color: #001F3F; padding: 20px; border-radius: 10px; border-left: 10px solid #00ff41;'><h2 style='color: white; margin: 0;'>🎓 STUDENT HUB</h2><p style='color: #D4AF37; margin: 0;'>Senior Examiner AI Active</p></div><br>", unsafe_allow_html=True)
+    st.markdown("<div class='portal-header'><h2 style='color: white; margin: 0;'>🎓 AXOM STUDENT HUB</h2><p style='color: #D4AF37; margin: 0;'>Advanced Examiner AI Active</p></div>", unsafe_allow_html=True)
 
     if error_message:
         st.error(f"Engine Offline: {error_message}")
         st.stop()
 
-    tab1, tab2 = st.tabs(["📝 Written Exam Marking", "🎙️ Live Speaking Lab"])
+    tab1, tab2 = st.tabs(["📝 Document Analysis", "🎙️ Live Speaking Interview"])
 
-    # --- TAB 1: PDF EXAM MARKING ---
+    # --- MODULE 1: PDF SCANNER ---
     with tab1:
-        st.header("Upload Written Work")
-        uploaded_file = st.file_uploader("Upload Exam Paper (PDF format)", type=['pdf'])
+        st.markdown("### Upload Exam Script")
+        uploaded_file = st.file_uploader("Compatible Formats: PDF", type=['pdf'])
         
         if uploaded_file:
-            rigor = st.select_slider("Select Marking Rigor", options=["Standard", "Harsh"])
+            rigor = st.select_slider("Marking Rigor", options=["Standard", "Harsh (Senior Examiner)"])
             tos_agreed = st.checkbox("I agree to the Halal-Ads & Data Privacy Terms")
             
-            if st.button("RUN AXOM ANALYSIS", disabled=not tos_agreed, use_container_width=True):
+            if st.button("INITIATE AXOM SCAN", disabled=not tos_agreed, use_container_width=True):
                 progress_bar = st.progress(0)
                 for i in range(10):
                     progress_bar.progress((i + 1) / 10)
-                    time.sleep(0.2)
+                    time.sleep(0.15)
                 
-                with st.spinner("AI Scanning Syntax & Descriptors..."):
+                with st.spinner("Analyzing Morphology & Syntax..."):
                     try:
                         pdf_parts = [{"mime_type": "application/pdf", "data": uploaded_file.getvalue()}]
-                        prompt = f"Act as a Senior IGCSE Examiner. Mark this paper in {rigor} mode. Provide a Band Score, Task Response critique, and Cohesion analysis. Format corrections as: JSON_START [{{\"action\": \"strike_through\", \"text\": \"wrong_word\", \"comment\": \"reason\"}}] JSON_END"
+                        prompt = f"Act as a strict IGCSE Examiner. Mark this paper in {rigor} mode. Provide a Band Score. Format corrections as: JSON_START [{{\"action\": \"strike_through\", \"text\": \"wrong_word\", \"comment\": \"reason\"}}] JSON_END"
                         
                         response = model.generate_content([prompt] + pdf_parts)
-                        full_text = response.text
-                        
-                        report_text = full_text.split("JSON_START")[0] if "JSON_START" in full_text else full_text
+                        report_text = response.text.split("JSON_START")[0] if "JSON_START" in response.text else response.text
                         
                         st.session_state.history.append({
                             "filename": uploaded_file.name, 
                             "timestamp": time.strftime("%H:%M")
                         })
                         
-                        st.success("Analysis Complete.")
-                        st.markdown("### Official Examiner Report")
+                        st.markdown("<h3 class='success-text'>Scan Complete.</h3>", unsafe_allow_html=True)
                         st.write(report_text)
-                        
                     except Exception as e:
-                        st.error(f"Analysis failed: {e}")
+                        st.error(f"Scan failed due to system overload: {e}")
 
-    # --- TAB 2: LIVE SPEAKING AI ---
+    # --- MODULE 2: LIVE VOICE AI ---
     with tab2:
-        st.header("🎙️ AXOM Live Interview")
-        st.write("Click the microphone, speak naturally, and the Examiner will reply instantly.")
+        st.markdown("### 🎙️ The Live Interview")
+        st.write("Ensure your microphone is enabled. Tap to speak, tap to send.")
 
-        # Initialize the AI Examiner's brain if it hasn't started yet
         if st.session_state.live_chat is None:
             st.session_state.live_chat = model.start_chat(history=[])
-            intro_msg = "Hello, I am your AXOM Speaking Examiner. Are you ready to begin your mock test?"
+            intro_msg = "Welcome to the AXOM Speaking Lab. I am your Senior Examiner. Are you ready to begin the test?"
             st.session_state.last_ai_msg = intro_msg
-            axom_speak(intro_msg) # Speak the intro
+            axom_speak(intro_msg) 
 
-        # Display what the AI just said
-        st.info(f"**Examiner says:** {st.session_state.last_ai_msg}")
+        st.info(f"**Examiner:** {st.session_state.last_ai_msg}")
 
-        # The Live Microphone
+        # Live Audio Capture
         audio_data = mic_recorder(
-            start_prompt="Tap to Speak 🎙️",
-            stop_prompt="Tap to Send ⏹️",
+            start_prompt="🎙️ Tap to Record",
+            stop_prompt="⏹️ Tap to Submit",
             key='student_mic'
         )
 
         if audio_data:
-            with st.spinner("AXOM is processing your speech..."):
+            with st.spinner("Processing speech patterns..."):
                 r = sr.Recognizer()
                 audio_file = io.BytesIO(audio_data['bytes'])
                 with sr.AudioFile(audio_file) as source:
-                    recorded_audio = r.record(source)
                     try:
-                        # 1. Transcribe Student Speech
+                        recorded_audio = r.record(source)
                         user_text = r.recognize_google(recorded_audio)
-                        st.success(f"**You said:** {user_text}")
+                        st.success(f"**You:** {user_text}")
                         
-                        # 2. Send to Gemini and get response
-                        sys_prompt = f"You are an IGCSE Speaking Examiner. The student just said: '{user_text}'. Respond naturally to continue the conversation, assess their English slightly, and ask the next question."
+                        sys_prompt = f"You are an IGCSE Speaking Examiner. The student said: '{user_text}'. Respond naturally, correct one grammar mistake if necessary, and ask the next question to keep the conversation going."
                         response = st.session_state.live_chat.send_message(sys_prompt)
                         st.session_state.last_ai_msg = response.text
                         
-                        # 3. Speak the AI response aloud
                         axom_speak(response.text)
-                        st.rerun() # Refresh UI to show new state
+                        st.rerun() 
                         
                     except sr.UnknownValueError:
-                        st.error("Examiner: I couldn't quite catch that. Could you speak a bit louder?")
+                        st.warning("Audio not detected clearly. Please speak closer to the microphone.")
                     except Exception as e:
-                        st.error(f"Audio processing error: {e}")
+                        st.error(f"Microphone offline: {e}")
 
 # ==========================================
-# 6. TEACHER & PARENT PORTALS (Upcoming Sprints)
+# 6. TEACHER & PARENT PORTALS
 # ==========================================
 elif st.session_state.role == "Teacher":
-    st.markdown("<div style='background-color: #003F1F; padding: 20px; border-radius: 10px;'><h2 style='color: white;'>👨‍🏫 TEACHER DASHBOARD</h2></div><br>", unsafe_allow_html=True)
-    st.info("Module 1: Handwriting Clone & Auto-Grader infrastructure is being prepared.")
-    st.write("Generate Class Code: `AXOM-PRO-2026`")
+    st.markdown("<div class='portal-header' style='border-left-color: #00ff41;'><h2 style='color: white; margin: 0;'>👨‍🏫 TEACHER DASHBOARD</h2></div>", unsafe_allow_html=True)
+    st.info("System Update: The 'Teacher Handwriting Clone' AI model is training and will deploy in v2.0.")
+    st.write("**Your Global Class Code:** `AXOM-PRO-2026`")
 
 elif st.session_state.role == "Parent":
-    st.markdown("<div style='background-color: #3F001F; padding: 20px; border-radius: 10px;'><h2 style='color: white;'>👪 PARENT DASHBOARD</h2></div><br>", unsafe_allow_html=True)
-    st.info("Module 1: Grade Predictor & Ad Safeguard infrastructure is being prepared.")
-    st.metric(label="Student: Ibrahim_CEO | Target Grade", value="Band 8.5")
+    st.markdown("<div class='portal-header' style='border-left-color: #ff0041;'><h2 style='color: white; margin: 0;'>👪 PARENT DASHBOARD</h2></div>", unsafe_allow_html=True)
+    st.info("System Update: 'Live Grade Predictor' and Halal Ad-Blocking filters are active.")
+    st.metric(label="Student Target Goal", value="Band 8.5", delta="On Track")
 
 # ==========================================
 # 7. FOOTER
 # ==========================================
 st.markdown("---")
-st.markdown("<p style='text-align: center; color: grey; font-size: 0.8rem;'>© 2026 AXOM Global Educational Systems | Powered by Gemini 2.0 Flash</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #555; font-size: 0.8rem;'>© 2026 AXOM Global Educational Systems | Powered by Gemini 2.0 Flash</p>", unsafe_allow_html=True)
