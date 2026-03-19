@@ -1,15 +1,11 @@
 import streamlit as st
 import google.generativeai as genai
-from PIL import Image
-import pymupdf as fitz 
+import re
 import time
 import io
-import cv2
-import numpy as np
-from gtts import gTTS
 import base64
+from gtts import gTTS
 from streamlit_mic_recorder import mic_recorder
-import speech_recognition as sr
 
 # ==========================================
 # 1. SYSTEM CONFIGURATION & THEME
@@ -19,24 +15,55 @@ st.set_page_config(page_title="AXOM Global Systems", layout="wide")
 st.markdown("""
     <style>
     .stApp { background-color: #0b0f19; color: #ffffff; }
+    .welcome-note { 
+        font-size: 2rem; 
+        font-weight: bold; 
+        color: #D4AF37; 
+        text-align: center; 
+        padding: 40px; 
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
     .portal-header { 
         background-color: #001F3F; 
-        padding: 25px; 
-        border-radius: 0px; 
+        padding: 20px; 
         border-left: 10px solid #D4AF37; 
-        margin-bottom: 25px; 
+        margin-bottom: 20px; 
     }
-    .status-active { color: #00ff41; font-weight: bold; font-size: 0.8rem; letter-spacing: 1px; }
-    .stButton>button { border-radius: 0px; font-weight: bold; transition: 0.3s; text-transform: uppercase; }
-    .stButton>button:hover { border: 1px solid #D4AF37; color: #D4AF37; }
+    .stButton>button { 
+        border-radius: 0px; 
+        font-weight: bold; 
+        height: 60px;
+        transition: 0.3s; 
+        text-transform: uppercase;
+        border: 1px solid #1e293b;
+    }
+    .stButton>button:hover { border: 1px solid #D4AF37; color: #D4AF37; background-color: #001F3F; }
     </style>
     """, unsafe_allow_html=True)
 
+# --- Session State Initialization ---
+states = {
+    'logged_in': False,
+    'user_email': None,
+    'user_name': None,
+    'board': None,
+    'subject': None,
+    'menu_choice': "DASHBOARD",
+    'last_ai_msg': ""
+}
+for key, value in states.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
+
 # ==========================================
-# 2. CORE ENGINES
+# 2. CORE UTILITIES
 # ==========================================
+def is_valid_email(email):
+    pattern = r"^[a-zA-Z0-9_.+-]+@(gmail\.com|googlemail\.com|yahoo\.com|icloud\.com|apple\.com)$"
+    return re.match(pattern, email)
+
 def axom_speak(text):
-    """Audio output for examiner feedback."""
     try:
         tts = gTTS(text=text, lang='en', tld='co.uk')
         fp = io.BytesIO()
@@ -44,128 +71,128 @@ def axom_speak(text):
         b64 = base64.b64encode(fp.getvalue()).decode()
         md = f'<audio autoplay="true" src="data:audio/mp3;base64,{b64}">'
         st.markdown(md, unsafe_allow_html=True)
-    except Exception:
+    except:
         pass
 
-@st.cache_resource
-def load_axom_engine():
-    """AI Model Initialization."""
-    try:
-        api_key = st.secrets["GEMINI_KEY"]
-        genai.configure(api_key=api_key)
-        return genai.GenerativeModel('gemini-2.0-flash'), None
-    except Exception as e:
-        return None, str(e)
-
-model, error_message = load_axom_engine()
-
-# --- State Management ---
-if 'role' not in st.session_state: st.session_state.role = None
-if 'subject' not in st.session_state: st.session_state.subject = "English"
-if 'history' not in st.session_state: st.session_state.history = []
-if 'live_chat' not in st.session_state: st.session_state.live_chat = None
-if 'last_ai_msg' not in st.session_state: st.session_state.last_ai_msg = ""
-if 'exam_active' not in st.session_state: st.session_state.exam_active = False
-
 # ==========================================
-# 3. AUTHENTICATION INTERFACE
+# 3. PHASE 1: LOGIN GATE
 # ==========================================
-if not st.session_state.role:
-    st.markdown("<h1 style='text-align: center; color: #D4AF37;'>AXOM GLOBAL SYSTEMS</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Advanced Academic Intelligence | June 2026 Series</p>", unsafe_allow_html=True)
+if not st.session_state.logged_in:
+    st.markdown("<h1 style='text-align: center; color: #D4AF37;'>AXOM TERMINAL ACCESS</h1>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("STUDENT PORTAL", use_container_width=True): st.session_state.role = "Student"
-    with col2:
-        if st.button("TEACHER CONTROL", use_container_width=True): st.session_state.role = "Teacher"
-    with col3:
-        if st.button("PARENT OBSERVER", use_container_width=True): st.session_state.role = "Parent"
+    col_l, col_c, col_r = st.columns([1, 2, 1])
+    with col_c:
+        email = st.text_input("AUTHORIZED EMAIL (GOOGLE, YAHOO, APPLE)")
+        name = st.text_input("FULL NAME")
+        
+        if st.button("AUTHENTICATE SYSTEM", use_container_width=True):
+            if is_valid_email(email) and name:
+                st.session_state.logged_in = True
+                st.session_state.user_email = email
+                st.session_state.user_name = name.upper()
+                st.rerun()
+            else:
+                st.error("ACCESS DENIED: INVALID EMAIL DOMAIN")
     st.stop()
 
 # ==========================================
-# 4. NAVIGATION CONTROL
+# 4. PHASE 2: ONBOARDING (BOARD & SUBJECT)
 # ==========================================
+if st.session_state.board is None:
+    st.markdown(f"<div class='welcome-note'>WELCOME TO AXOM {st.session_state.user_name}</div>", unsafe_allow_html=True)
+    
+    col_l, col_c, col_r = st.columns([1, 2, 1])
+    with col_c:
+        board = st.selectbox("SELECT EXAMINATION BOARD", ["CAMBRIDGE IGCSE/A-LEVEL", "EDEXCEL", "OXFORD AQA", "IB", "SAUDI NATIONAL"])
+        subject = st.selectbox("SELECT PRIMARY SUBJECT", ["ENGLISH", "MATHEMATICS", "PHYSICS", "CHEMISTRY", "BIOLOGY", "BUSINESS STUDIES"])
+        
+        if st.button("INITIALIZE DASHBOARD", use_container_width=True):
+            st.session_state.board = board
+            st.session_state.subject = subject
+            st.rerun()
+    st.stop()
+
+# ==========================================
+# 5. PHASE 3: MAIN DASHBOARD GRID
+# ==========================================
+
+# Top Navigation Bar
+st.markdown(f"""
+    <div class='portal-header'>
+        <div style='display: flex; justify-content: space-between; align-items: center;'>
+            <h2 style='margin:0; color: white;'>AXOM COMMAND CENTER</h2>
+            <div style='text-align: right;'>
+                <span style='color: #D4AF37; font-weight: bold;'>{st.session_state.user_name}</span><br>
+                <span style='font-size: 0.8rem;'>{st.session_state.board} | {st.session_state.subject}</span>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Sidebar Control
 with st.sidebar:
-    st.title("AXOM NAV")
-    st.session_state.subject = st.selectbox("Current Subject", ["English", "Math", "Physics", "Biology", "Business"])
-    st.divider()
-    if st.button("LOG OUT", use_container_width=True):
-        st.session_state.role = None
+    st.title("SETTINGS")
+    if st.button("SIGN OUT", use_container_width=True):
+        for key in st.session_state.keys():
+            del st.session_state[key]
         st.rerun()
 
+# 12-BUTTON COMMAND GRID
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    if st.button("PAST PAPER CHECKER", use_container_width=True): st.session_state.menu_choice = "PAPER CHECKER"
+    if st.button("SCHEDULES OF CLASSES", use_container_width=True): st.session_state.menu_choice = "SCHEDULES"
+    if st.button("CLASSROOMS (AXON)", use_container_width=True): st.session_state.menu_choice = "CLASSROOMS"
+    if st.button("LEADERBOARD CHART", use_container_width=True): st.session_state.menu_choice = "LEADERBOARD"
+
+with col2:
+    if st.button("HISTORY", use_container_width=True): st.session_state.menu_choice = "HISTORY"
+    if st.button("REPORTS", use_container_width=True): st.session_state.menu_choice = "REPORTS"
+    if st.button("INTERACTIVE AI SYSTEM", use_container_width=True): st.session_state.menu_choice = "AI CHAT"
+    if st.button("SUBSCRIPTION SETTINGS", use_container_width=True): st.session_state.menu_choice = "SUBSCRIPTION"
+
+with col3:
+    if st.button("FLASHCARDS", use_container_width=True): st.session_state.menu_choice = "FLASHCARDS"
+    if st.button("MAP OF REPORT", use_container_width=True): st.session_state.menu_choice = "REPORT MAP"
+    if st.button("AI REVISION (VOICE)", use_container_width=True): st.session_state.menu_choice = "AI REVISION"
+    if st.button("PERSONAL SETTINGS", use_container_width=True): st.session_state.menu_choice = "SETTINGS"
+
+st.divider()
+
 # ==========================================
-# 5. STUDENT PORTAL
+# 6. DYNAMIC MODULE LOADER
 # ==========================================
-if st.session_state.role == "Student":
-    st.markdown(f"""<div class='portal-header'>
-        <h2 style='color: white; margin: 0;'>STUDENT HUB: {st.session_state.subject.upper()}</h2>
-        <p class='status-active'>SYSTEM STATUS: AI AGENT ONLINE</p>
-    </div>""", unsafe_allow_html=True)
+current_view = st.session_state.menu_choice
+st.markdown(f"<h3 style='color: #D4AF37;'>ACTIVE MODULE: {current_view}</h3>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["Document Analysis", "Speaking Lab", "AXON Live Class"])
+if current_view == "CLASSROOMS":
+    st.info("SECURE AXON CONNECTION ESTABLISHED")
+    room_id = f"AXOM-{st.session_state.subject}-{st.session_state.user_name}"
+    st.components.v1.iframe(f"https://meet.jit.si/{room_id}", height=650)
 
-    with tab1:
-        st.subheader(f"Academic Analysis: {st.session_state.subject}")
-        uploaded_file = st.file_uploader("Upload PDF Exam Script", type=['pdf'])
-        
-        if uploaded_file:
-            rigor = st.select_slider("Marking Rigor", options=["Standard", "Harsh Examiner Mode"])
-            if st.button("INITIATE SCAN"):
-                with st.spinner("Analyzing Morphology and Logic..."):
-                    pdf_parts = [{"mime_type": "application/pdf", "data": uploaded_file.getvalue()}]
-                    sys_prompt = f"Act as a {rigor} Senior Examiner for {st.session_state.subject}. Mark this paper. Provide a Band Score. Be extremely specific on errors."
-                    response = model.generate_content([sys_prompt] + pdf_parts)
-                    st.success("Analysis Complete")
-                    st.markdown(response.text)
+elif current_view == "AI REVISION":
+    st.write("VOICE REVISION SYSTEM ACTIVE. SPEAK TO BEGIN YOUR SESSION.")
+    audio = mic_recorder(start_prompt="START TALKING", stop_prompt="FINISH REVISION", key='rev_mic')
+    # AI logic would process bytes here
 
-    with tab2:
-        st.subheader("AXON LIVE SPEAKING EXAM")
-        
-        # --- THE COMMAND BUTTON ---
-        if not st.session_state.exam_active:
-            if st.button("START LIVE SPEAKING EXAM", use_container_width=True):
-                st.session_state.exam_active = True
-                st.session_state.live_chat = model.start_chat(history=[])
-                
-                intro_text = f"Welcome to the AXON Global Speaking Exam for {st.session_state.subject}. I am your Senior Examiner. Please state your name and candidate number to begin."
-                st.session_state.last_ai_msg = intro_text
-                axom_speak(intro_text)
-                st.rerun()
-        else:
-            if st.button("END EXAM & GENERATE REPORT", type="primary", use_container_width=True):
-                st.session_state.exam_active = False
-                st.rerun()
+elif current_view == "PAPER CHECKER":
+    st.file_uploader("UPLOAD PDF SCRIPT", type=['pdf'])
+    st.button("INITIATE EXAMINER MARKING")
 
-        # --- THE INTERACTION ZONE ---
-        if st.session_state.exam_active:
-            st.info(f"EXAMINER: {st.session_state.last_ai_msg}")
-            
-            audio_data = mic_recorder(
-                start_prompt="LISTEN MODE: ON (Speak Now)",
-                stop_prompt="PROCESS RESPONSE",
-                key='live_mic_stream'
-            )
+elif current_view == "REPORT MAP":
+    st.info("VISUALIZING PERFORMANCE DATA ACROSS GLOBAL CANDIDATES...")
+    # Placeholder for mapping logic
 
-            if audio_data:
-                with st.spinner("Examiner is evaluating..."):
-                    try:
-                        prompt_instructions = f"You are a strict {st.session_state.subject} Examiner. Listen to the audio. Correct errors and ask the next exam question."
-                        
-                        audio_payload = [
-                            {"mime_type": "audio/webm", "data": audio_data['bytes']},
-                            prompt_instructions
-                        ]
+elif current_view == "SETTINGS":
+    st.write(f"ID: {st.session_state.user_email}")
+    if st.button("UPDATE BOARD/SUBJECT"):
+        st.session_state.board = None
+        st.rerun()
 
-                        response = st.session_state.live_chat.send_message(audio_payload)
-                        st.session_state.last_ai_msg = response.text
-                        axom_speak(response.text)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Connection Interrupted: {e}")
+else:
+    st.warning(f"THE {current_view} MODULE IS UNDERGOING FINAL CALIBRATION FOR THE 2026 SESSION.")
 
-    with tab3:
-        st.subheader("AXON Virtual Suite")
-        st.write("Join the encrypted video session for live instruction.")
-        room_id = f"AXOM-GLOBAL-{st.session_state.subject}-2026"
-        jitsi_url = f"https://meet.jit.si/{room_id}#config.startWithAudioMuted=true"
+# Footer
+st.markdown("---")
+st.markdown("<p style='text-align: center; color: #555; font-size: 0.7rem;'>COPYRIGHT 2026 AXOM GLOBAL EDUCATIONAL SYSTEMS | POWERED BY GEMINI 2.0 FLASH</p>", unsafe_allow_html=True)
