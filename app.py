@@ -1,162 +1,121 @@
 import streamlit as st
-import google.generativeai as genai
-import re
-import io
-import base64
+import random
+import smtplib
 import time
-from PIL import Image, ImageDraw, ImageFont
-from pdf2image import convert_from_bytes
+from email.mime.text import MIMEText
+# (Keep your other imports like PIL, genai, pdf2image here for the Paper Checker)
 
 # ==========================================
-# 1. CORE CONFIG & META-DESIGN
+# 1. ENTERPRISE UI & CONFIG
 # ==========================================
-st.set_page_config(page_title="AXOM // GLOBAL", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="AXOM | Professional Terminal", layout="wide", initial_sidebar_state="collapsed")
 
-def inject_cyber_styles():
+def inject_enterprise_styles():
     st.markdown("""
         <style>
-        .stApp { background: linear-gradient(135deg, #020617 0%, #0f172a 100%); color: #f8fafc; }
-        
-        /* Remove the 'Hollow Block' / Border from Tabs */
-        [data-testid="stExpander"], [data-testid="stVerticalBlock"] > div { border: none !important; }
-        .stTabs [data-baseweb="tab-panel"] { border: none !important; padding-top: 20px !important; }
-        
-        /* Auth Card */
-        .auth-container {
-            max-width: 450px; margin: 60px auto; padding: 40px;
-            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(20px);
-            border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 8px;
-            text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        .stApp { background-color: #fafafa; color: #111827; font-family: 'Inter', sans-serif; }
+        .auth-card {
+            max-width: 400px; margin: 100px auto; padding: 40px;
+            background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); text-align: center;
         }
-        
-        .brand-logo { 
-            font-size: 4rem; font-weight: 900; color: #D4AF37; 
-            letter-spacing: 15px; text-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
-            margin-bottom: 0px;
-        }
-
-        /* Glowing Cyber Buttons */
+        .brand-text { font-size: 2.5rem; font-weight: 800; color: #111827; letter-spacing: 2px; margin-bottom: 5px; }
+        .sub-text { color: #6b7280; font-size: 0.9rem; margin-bottom: 30px; }
         .stButton>button {
-            width: 100%; background: transparent !important; color: #D4AF37 !important;
-            border: 1px solid #D4AF37 !important; transition: 0.4s;
-            text-transform: uppercase; letter-spacing: 2px; font-weight: bold;
+            width: 100%; background-color: #111827 !important; color: #ffffff !important;
+            border: none !important; border-radius: 6px !important; padding: 12px !important;
+            font-weight: 600 !important; transition: 0.2s ease;
         }
-        .stButton>button:hover {
-            background: #D4AF37 !important; color: #020617 !important;
-            box-shadow: 0 0 30px rgba(212, 175, 55, 0.5);
-        }
-
-        /* Scrollable Paper Container */
-        .zoom-container {
-            width:100%; height:800px; overflow:scroll; 
-            border: 1px solid rgba(212, 175, 55, 0.3); background: #000;
-        }
+        .stButton>button:hover { background-color: #374151 !important; }
+        input { border-radius: 6px !important; border: 1px solid #d1d5db !important; padding: 10px !important; }
         </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. THE HANDWRITING ENGINE
+# 2. EMAIL VERIFICATION ENGINE (OTP)
 # ==========================================
-def draw_neural_marks(draw, coords, note, w, h, cat):
-    colors = {"error": "#ff3131", "correct": "#39ff14", "info": "#1f51ff"}
-    pen_color = colors.get(cat.lower(), "#ff3131")
+def send_verification_email(receiver_email, otp_code):
+    """Sends the 6-digit code to the user."""
     
-    ymin, xmin, ymax, xmax = coords
-    l, t, r, b = xmin*w/1000, ymin*h/1000, xmax*w/1000, ymax*h/1000
+    # ⚠️ SYSTEM ADMIN: PUT YOUR ACTUAL GMAIL AND APP PASSWORD HERE ⚠️
+    sender_email = "YOUR_EMAIL@gmail.com" 
+    app_password = "YOUR_16_LETTER_APP_PASSWORD" 
+    
+    msg = MIMEText(f"Your AXOM secure login code is: {otp_code}\n\nThis code expires in 10 minutes. Do not share it with anyone.")
+    msg['Subject'] = 'AXOM Security Code'
+    msg['From'] = f"AXOM Security <{sender_email}>"
+    msg['To'] = receiver_email
 
-    if cat.lower() == "correct":
-        draw.line([l, (t+b)/2, (l+r)/2, b, r, t-20], fill=pen_color, width=10)
-    else:
-        draw.rectangle([l, t, r, b], outline=pen_color, width=6)
-
-    # LOAD IBRAHIM HANDWRITING
     try:
-        font = ImageFont.truetype("ibrahim_handwriting.ttf", 55)
-    except:
-        font = ImageFont.load_default()
-
-    # Draw Text with slight shadow for 'Ink' feel
-    draw.text((r + 12, t + 2), note, fill="#000", font=font)
-    draw.text((r + 10, t), note, fill=pen_color, font=font)
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(sender_email, app_password)
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        print(f"Email routing failed: {e}")
+        return False
 
 # ==========================================
-# 3. ROUTING & STATE
+# 3. STATE MANAGEMENT
 # ==========================================
-if 'auth' not in st.session_state: st.session_state.auth = False
-if 'page' not in st.session_state: st.session_state.page = "GATE"
+if 'auth_status' not in st.session_state: st.session_state.auth_status = "logged_out" 
+if 'user_email' not in st.session_state: st.session_state.user_email = ""
+if 'generated_otp' not in st.session_state: st.session_state.generated_otp = ""
 
-inject_cyber_styles()
+inject_enterprise_styles()
 
-if not st.session_state.auth:
+# ==========================================
+# 4. THE AUTHENTICATION GATEWAY
+# ==========================================
+if st.session_state.auth_status != "logged_in":
     _, col, _ = st.columns([1, 1.5, 1])
     with col:
-        st.markdown('<div class="auth-container">', unsafe_allow_html=True)
-        st.markdown('<h1 class="brand-logo">AXOM</h1>', unsafe_allow_html=True)
-        st.markdown('<p style="color: #64748b; font-size: 0.8rem; margin-bottom: 30px;">// SECURE NEURAL LINK v3.1 //</p>', unsafe_allow_html=True)
-        
-        # Cleaner SSO Buttons
-        if st.button("SIGN IN WITH GOOGLE"):
-            st.session_state.auth = True
-            st.rerun()
-        st.write("<p style='font-size: 0.7rem; color: #444;'>OR</p>", unsafe_allow_html=True)
-        if st.button("SIGN IN WITH MICROSOFT"):
-            st.session_state.auth = True
-            st.rerun()
+        st.markdown('<div class="auth-card">', unsafe_allow_html=True)
+        st.markdown('<div class="brand-text">AXOM</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sub-text">Enterprise Examination Platform</div>', unsafe_allow_html=True)
+
+        # STEP 1: ASK FOR EMAIL
+        if st.session_state.auth_status == "logged_out":
+            email_input = st.text_input("Work or School Email", placeholder="name@school.edu")
+            if st.button("Continue with Email"):
+                if "@" in email_input and "." in email_input:
+                    otp = str(random.randint(100000, 999999))
+                    st.session_state.generated_otp = otp
+                    st.session_state.user_email = email_input
+                    
+                    with st.spinner("Encrypting and routing to your inbox..."):
+                        # THIS ACTUALLY SENDS THE EMAIL NOW
+                        email_sent = send_verification_email(email_input, otp)
+                        
+                        if email_sent:
+                            st.session_state.auth_status = "otp_sent"
+                            st.rerun()
+                        else:
+                            st.error("System Error: Could not route email. Check server configuration.")
+                else:
+                    st.error("Invalid email format.")
+
+        # STEP 2: VERIFY OTP CODE
+        elif st.session_state.auth_status == "otp_sent":
+            st.info(f"We sent a 6-digit code to **{st.session_state.user_email}**")
+            entered_otp = st.text_input("Enter 6-digit code", max_chars=6)
+            
+            if st.button("Verify & Sign In"):
+                if entered_otp == st.session_state.generated_otp:
+                    st.session_state.auth_status = "logged_in"
+                    st.rerun()
+                else:
+                    st.error("Authentication failed. Invalid code.")
+            
+            if st.button("← Use a different email"):
+                st.session_state.auth_status = "logged_out"
+                st.rerun()
+
         st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
 # ==========================================
-# 4. COMMAND CENTER (POST-LOGIN)
+# 5. CORE ENGINE (POST-LOGIN)
 # ==========================================
-# Glass Header
-st.markdown("""
-    <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid rgba(212, 175, 55, 0.2);">
-        <h2 style="color: #D4AF37; margin:0; letter-spacing: 5px;">AXOM // CMD</h2>
-        <div style="color: #39ff14; font-size: 0.8rem;">● SECURE_SESSION_ACTIVE</div>
-    </div>
-""", unsafe_allow_html=True)
-
-with st.sidebar:
-    st.markdown("<h3 style='color: #D4AF37;'>PROTOCOLS</h3>", unsafe_allow_html=True)
-    if st.button("PAPER CHECKER"): st.session_state.page = "CHECKER"
-    if st.button("AI MENTOR"): st.session_state.page = "AI"
-    st.divider()
-    if st.button("TERMINATE"):
-        st.session_state.auth = False
-        st.rerun()
-
-if st.session_state.page == "CHECKER":
-    st.markdown("<h3 style='color: #D4AF37;'>NEURAL MARKING ENGINE</h3>", unsafe_allow_html=True)
-    
-    file = st.file_uploader("UPLOAD SCRIPT", type=['pdf', 'jpg', 'png'])
-    if file:
-        res = st.select_slider("RENDER RESOLUTION", options=["SD", "HD", "4K"])
-        px_w = {"SD": 900, "HD": 1500, "4K": 2500}[res]
-        
-        if st.button("EXECUTE MARKING"):
-            with st.spinner("AI EXAMINER ANALYZING PIXELS..."):
-                # File Processing
-                if file.type == "application/pdf":
-                    img = convert_from_bytes(file.getvalue())[0].convert("RGB")
-                else:
-                    img = Image.open(file).convert("RGB")
-                
-                w, h = img.size
-                draw = ImageDraw.Draw(img)
-
-                # AI Logic
-                model = genai.GenerativeModel('gemini-2.0-flash')
-                resp = model.generate_content(["Analyze and mark this exam paper. Format: [ymin, xmin, ymax, xmax] | category | note", img])
-                
-                # Marking
-                for line in resp.text.split('\n'):
-                    if '|' in line:
-                        match = re.search(r'\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\]', line)
-                        if match:
-                            coords = [int(x) for x in match.groups()]
-                            draw_neural_marks(draw, coords, line.split('|')[2].strip(), w, h, line.split('|')[1].strip())
-
-                # Display
-                buf = io.BytesIO()
-                img.save(buf, format="PNG")
-                st.markdown(f'<div class="zoom-container"><img src="data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}" style="width:{px_w}px;"></div>', unsafe_allow_html=True)
+# (Insert your Paper Checker UI and logic here)
+st.success(f"Welcome to the AXOM Dashboard, {st.session_state.user_email}")
