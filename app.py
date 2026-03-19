@@ -8,78 +8,88 @@ from PIL import Image, ImageDraw, ImageFont
 from pdf2image import convert_from_bytes
 
 # ==========================================
-# 1. SECURITY & SYSTEM CONFIG
+# 1. AXOM CORE ENGINE CONFIG
 # ==========================================
-# CHANGE THIS KEY TO YOUR SECRET PASSWORD
-MASTER_ACCESS_KEY = "AXOM-2026-PRO" 
+st.set_page_config(page_title="AXOM Global Terminal", layout="wide", initial_sidebar_state="collapsed")
 
-st.set_page_config(page_title="AXOM Global Terminal", layout="wide")
-
+# Professional Dark UI with Gold Accents
 st.markdown("""
     <style>
     .stApp { background-color: #0b0f19; color: #ffffff; }
+    
+    /* Login Card Styling */
+    .login-container {
+        display: flex; justify-content: center; align-items: center; height: 80vh;
+    }
     .auth-card {
-        background-color: #001F3F; padding: 40px; border-radius: 15px;
-        border: 2px solid #D4AF37; box-shadow: 0px 0px 30px rgba(212, 175, 55, 0.2);
-        text-align: center; margin-top: 50px;
+        background-color: #001F3F; padding: 50px; border-radius: 20px;
+        border: 1px solid #D4AF37; box-shadow: 0px 10px 40px rgba(0,0,0,0.8);
+        text-align: center; width: 450px;
     }
+    .sso-button {
+        display: flex; align-items: center; justify-content: center;
+        background-color: white; color: #000; padding: 12px;
+        border-radius: 5px; cursor: pointer; font-weight: bold;
+        margin-top: 20px; border: 1px solid #ddd; transition: 0.3s;
+    }
+    .sso-button:hover { background-color: #f1f1f1; transform: translateY(-2px); }
+    
+    /* Dashboard Styling */
     .portal-header { 
-        background-color: #001F3F; padding: 25px; border-left: 10px solid #D4AF37; 
-        margin-bottom: 25px; box-shadow: 0px 4px 15px rgba(0,0,0,0.5);
+        background-color: #001F3F; padding: 20px; border-bottom: 3px solid #D4AF37; 
+        margin-bottom: 30px;
     }
-    .stButton>button { 
-        border-radius: 5px; height: 55px; font-weight: bold; text-transform: uppercase; 
-        transition: 0.4s; border: 1px solid #D4AF37; background-color: #0f172a; color: #D4AF37;
-    }
-    .stButton>button:hover { background-color: #D4AF37; color: #001F3F; }
     .zoom-container {
-        width:100%; height:750px; overflow:scroll; border:3px solid #D4AF37; 
-        background-color: #1a1a1a; padding: 15px; border-radius: 8px;
+        width:100%; height:750px; overflow:scroll; border:2px solid #D4AF37; 
+        background-color: #1a1a1a; border-radius: 10px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- Enhanced Session State ---
+# --- Session Management ---
 if 'authenticated' not in st.session_state: st.session_state.authenticated = False
-if 'user_role' not in st.session_state: st.session_state.user_role = None
+if 'user_data' not in st.session_state: st.session_state.user_data = {}
 if 'menu_choice' not in st.session_state: st.session_state.menu_choice = "DASHBOARD"
 
 # ==========================================
-# 2. THE IRON GATE (LOGIN SYSTEM)
+# 2. THE SECURE ACCESS GATE (SSO INTERFACE)
 # ==========================================
 if not st.session_state.authenticated:
-    _, col, _ = st.columns([1, 2, 1])
-    with col:
+    st.markdown('<div class="login-container">', unsafe_allow_html=True)
+    
+    # This is the actual UI users will see
+    with st.container():
         st.markdown("""
             <div class="auth-card">
-                <h1 style="color: #D4AF37; margin-bottom: 5px;">AXOM GLOBAL</h1>
-                <p style="color: #888; margin-bottom: 30px;">SECURE TERMINAL v2.5</p>
-            </div>
+                <h1 style="color: #D4AF37; letter-spacing: 5px; margin-bottom: 0;">AXOM</h1>
+                <p style="color: #888; font-size: 0.9rem; margin-bottom: 40px;">GLOBAL EXAMINATION TERMINAL</p>
+                <hr style="border: 0.5px solid #1e293b; margin-bottom: 30px;">
         """, unsafe_allow_html=True)
         
-        with st.container():
-            st.write("### ENTER SYSTEM CREDENTIALS")
-            input_name = st.text_input("FULL NAME", placeholder="e.g. IBRAHIM W. IMRAN")
-            input_email = st.text_input("AUTHORIZED EMAIL", placeholder="student@gmail.com")
-            input_key = st.text_input("SYSTEM ACCESS KEY", type="password", placeholder="••••••••")
+        # Google Login Simulation (Integration point for OAuth)
+        if st.button("🔴 SIGN IN WITH GOOGLE", use_container_width=True):
+            # In a live app, this triggers the Google Popup
+            st.session_state.authenticated = True
+            st.session_state.user_data = {"name": "AUTHORIZED USER", "email": "verified@axom.com"}
+            st.rerun()
             
-            if st.button("INITIALIZE SECURE UPLINK", use_container_width=True):
-                if input_key == MASTER_ACCESS_KEY:
-                    if "@" in input_email and len(input_name) > 2:
-                        st.session_state.authenticated = True
-                        st.session_state.user_name = input_name.upper()
-                        st.session_state.user_email = input_email
-                        st.success("AUTHENTICATION SUCCESSFUL. LOADING ENGINES...")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("INVALID IDENTITY FORMAT.")
-                else:
-                    st.error("ACCESS DENIED: INCORRECT SYSTEM KEY.")
+        if st.button("🔵 SIGN IN WITH MICROSOFT", use_container_width=True):
+            st.session_state.authenticated = True
+            st.session_state.user_data = {"name": "AUTHORIZED USER", "email": "verified@axom.com"}
+            st.rerun()
+
+        st.markdown("""
+                <p style="color: #555; font-size: 0.7rem; margin-top: 30px;">
+                    By signing in, you agree to AXOM Security Protocols.<br>
+                    v2.6 SECURE UPLINK
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
 # ==========================================
-# 3. CORE LOGIC (DRAWING & VISION)
+# 3. VISION & DRAWING ENGINE
 # ==========================================
 def draw_axom_marks(draw, coords, note, w, h, category):
     colors = {"error": "#FF3131", "correct": "#39FF14", "info": "#1F51FF"}
@@ -91,98 +101,87 @@ def draw_axom_marks(draw, coords, note, w, h, category):
         draw.line([left, (top+bottom)/2, (left+right)/2, bottom, right, top-20], fill=pen_color, width=8)
     elif category.lower() == "error":
         draw.ellipse([left, top, right, bottom], outline=pen_color, width=6)
-    else:
-        draw.line([left, bottom+10, right, bottom+10], fill=pen_color, width=5)
 
     try:
-        is_math = any(sym in note for sym in ['=', '+', '-', '/', '^', '√', 'x', 'y'])
-        f_size = 50 if is_math else 40
+        f_size = 45 if any(s in note for s in ['=', '+', '-', '/']) else 38
         axom_font = ImageFont.truetype("ibrahim_handwriting.ttf", f_size)
     except:
         axom_font = ImageFont.load_default()
 
-    text_pos = (right + 20, top) if category == "error" else (left, top - 65)
-    draw.text(text_pos, note, fill=pen_color, font=axom_font)
+    draw.text((right + 20, top), note, fill=pen_color, font=axom_font)
 
 # ==========================================
-# 4. COMMAND CENTER INTERFACE
+# 4. COMMAND CENTER (POST-LOGIN)
 # ==========================================
 st.markdown(f"""
     <div class='portal-header'>
         <div style='display: flex; justify-content: space-between; align-items: center;'>
-            <h2 style='margin:0; color: white;'>AXOM COMMAND: {st.session_state.menu_choice}</h2>
+            <h2 style='margin:0; color: #D4AF37; letter-spacing: 2px;'>AXOM // TERMINAL</h2>
             <div style='text-align: right;'>
-                <span style='color: #D4AF37; font-weight: bold;'>{st.session_state.user_name}</span><br>
-                <span style='font-size: 0.8rem; color: #888;'>SECURE SESSION ACTIVE</span>
+                <span style='color: white; font-weight: bold;'>{st.session_state.user_data.get('name')}</span><br>
+                <span style='font-size: 0.7rem; color: #39FF14;'>● SYSTEM SECURE</span>
             </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-nav1, nav2, nav3 = st.columns(3)
-with nav1:
+# Navigation Grid
+n1, n2, n3, n4 = st.columns(4)
+with n1:
     if st.button("📄 PAPER CHECKER", use_container_width=True): st.session_state.menu_choice = "PAPER CHECKER"
-with nav2:
-    if st.button("🤖 AI CHAT", use_container_width=True): st.session_state.menu_choice = "AI CHAT"
-with nav3:
-    if st.button("⚙️ SETTINGS / LOGOUT", use_container_width=True): st.session_state.menu_choice = "SETTINGS"
+with n2:
+    if st.button("🤖 AI ASSISTANT", use_container_width=True): st.session_state.menu_choice = "AI CHAT"
+with n3:
+    if st.button("📊 ANALYTICS", use_container_width=True): st.session_state.menu_choice = "REPORTS"
+with n4:
+    if st.button("🚪 LOGOUT", use_container_width=True): 
+        st.session_state.authenticated = False
+        st.rerun()
 
 st.divider()
 
 # ==========================================
-# 5. MODULES
+# 5. MODULE: PAPER CHECKER
 # ==========================================
 if st.session_state.menu_choice == "PAPER CHECKER":
-    st.markdown("<h3 style='color: #D4AF37;'>VISION ANALYZER</h3>", unsafe_allow_html=True)
+    st.markdown("### VISION ENGINE: TRUE-INK ANALYSIS")
     
-    col_a, col_b = st.columns([2, 1])
-    with col_a:
-        uploaded_file = st.file_uploader("UPLOAD SCRIPT", type=['pdf', 'jpg', 'png', 'jpeg'])
-    with col_b:
-        zoom_val = st.select_slider("VIEW RESOLUTION", options=["Standard", "Detailed", "Ultra-HD"])
-        width_px = {"Standard": 900, "Detailed": 1400, "Ultra-HD": 2200}[zoom_val]
-
-    if uploaded_file:
-        if st.button("RUN VISION SCAN", use_container_width=True):
-            with st.spinner("AI EXAMINER ANALYZING..."):
+    file = st.file_uploader("DROP SCRIPT HERE", type=['pdf', 'jpg', 'png', 'jpeg'])
+    
+    if file:
+        z_col, b_col = st.columns([1, 1])
+        with z_col:
+            res = st.select_slider("SCAN RESOLUTION", options=["SD", "HD", "4K"])
+            px = {"SD": 900, "HD": 1400, "4K": 2400}[res]
+        
+        if st.button("EXECUTE SCAN", use_container_width=True):
+            with st.spinner("AI VISION ANALYZING PIXELS..."):
                 try:
-                    if uploaded_file.type == "application/pdf":
-                        images = convert_from_bytes(uploaded_file.getvalue())
-                        img = images[0].convert("RGB")
+                    # Convert to Image
+                    if file.type == "application/pdf":
+                        img = convert_from_bytes(file.getvalue())[0].convert("RGB")
                     else:
-                        img = Image.open(uploaded_file).convert("RGB")
+                        img = Image.open(file).convert("RGB")
                     
                     w, h = img.size
                     draw = ImageDraw.Draw(img)
 
+                    # AI Logic
                     model = genai.GenerativeModel('gemini-2.0-flash')
-                    prompt = "Identify 5 points: 'error', 'correct', or 'info'. Format: [ymin, xmin, ymax, xmax] | category | Note"
+                    resp = model.generate_content(["Mark this script. [ymin, xmin, ymax, xmax] | category | Note", img])
                     
-                    response = model.generate_content([prompt, img])
-                    
-                    for line in response.text.split('\n'):
+                    for line in resp.text.split('\n'):
                         if '|' in line:
+                            coords = [int(x) for x in re.search(r'\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\]', line).groups()]
                             parts = line.split('|')
-                            coords_raw = re.search(r'\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\]', parts[0])
-                            if coords_raw:
-                                coords = [int(x) for x in coords_raw.groups()]
-                                draw_axom_marks(draw, coords, parts[1].strip(), parts[2].strip(), w, h, parts[1].strip())
+                            draw_axom_marks(draw, coords, parts[2].strip(), w, h, parts[1].strip())
 
-                    buffered = io.BytesIO()
-                    img.save(buffered, format="PNG")
-                    img_str = base64.b64encode(buffered.getvalue()).decode()
-                    
-                    st.markdown(f'<div class="zoom-container"><img src="data:image/png;base64,{img_str}" style="width:{width_px}px;"></div>', unsafe_allow_html=True)
-
+                    # Zoom Display
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    st.markdown(f'<div class="zoom-container"><img src="data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}" style="width:{px}px;"></div>', unsafe_allow_html=True)
                 except Exception as e:
-                    st.error(f"SYSTEM ERROR: {e}")
-
-elif st.session_state.menu_choice == "SETTINGS":
-    st.write(f"USER: {st.session_state.user_name}")
-    st.write(f"EMAIL: {st.session_state.user_email}")
-    if st.button("TERMINATE SESSION & LOGOUT"):
-        st.session_state.clear()
-        st.rerun()
+                    st.error(f"SCAN FAILED: {e}")
 
 st.markdown("---")
-st.markdown("<p style='text-align: center; color: #444;'>AXOM GLOBAL SECURE TERMINAL v2.5</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #444; font-size: 0.8rem;'>AXOM GLOBAL SECURE ACCESS // ENCRYPTED SESSION</p>", unsafe_allow_html=True)
