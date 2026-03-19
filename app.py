@@ -8,171 +8,155 @@ from PIL import Image, ImageDraw, ImageFont
 from pdf2image import convert_from_bytes
 
 # ==========================================
-# 1. ARCHITECTURAL UI CONFIG (META-DESIGN)
+# 1. CORE CONFIG & META-DESIGN
 # ==========================================
-st.set_page_config(
-    page_title="AXOM // GLOBAL GATEWAY", 
-    page_icon="⚡", 
-    layout="wide", 
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="AXOM // GLOBAL", layout="wide", initial_sidebar_state="collapsed")
 
 def inject_cyber_styles():
     st.markdown("""
         <style>
-        /* The Obsidian Background */
-        .stApp {
-            background: linear-gradient(135deg, #020617 0%, #0f172a 100%);
-            color: #f8fafc;
-        }
-
-        /* Glassmorphism Auth Card */
+        .stApp { background: linear-gradient(135deg, #020617 0%, #0f172a 100%); color: #f8fafc; }
+        
+        /* Remove the 'Hollow Block' / Border from Tabs */
+        [data-testid="stExpander"], [data-testid="stVerticalBlock"] > div { border: none !important; }
+        .stTabs [data-baseweb="tab-panel"] { border: none !important; padding-top: 20px !important; }
+        
+        /* Auth Card */
         .auth-container {
-            max-width: 480px;
-            margin: 80px auto;
-            padding: 50px;
-            background: rgba(15, 23, 42, 0.7);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(212, 175, 55, 0.3);
-            border-radius: 4px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 20px rgba(212, 175, 55, 0.1);
-            text-align: center;
+            max-width: 450px; margin: 60px auto; padding: 40px;
+            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(20px);
+            border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 8px;
+            text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+        
+        .brand-logo { 
+            font-size: 4rem; font-weight: 900; color: #D4AF37; 
+            letter-spacing: 15px; text-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+            margin-bottom: 0px;
         }
 
-        /* The "AXOM" Brand Glow */
-        .brand-logo {
-            font-size: 3.5rem;
-            font-weight: 900;
-            color: #D4AF37;
-            letter-spacing: 12px;
-            text-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
-            margin-bottom: 0;
-        }
-
-        /* High-Performance Neon Buttons */
+        /* Glowing Cyber Buttons */
         .stButton>button {
-            width: 100% !important;
-            background: transparent !important;
-            color: #D4AF37 !important;
-            border: 1px solid #D4AF37 !important;
-            padding: 15px !important;
-            font-weight: 800 !important;
-            text-transform: uppercase !important;
-            letter-spacing: 2px !important;
-            transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            width: 100%; background: transparent !important; color: #D4AF37 !important;
+            border: 1px solid #D4AF37 !important; transition: 0.4s;
+            text-transform: uppercase; letter-spacing: 2px; font-weight: bold;
         }
-
         .stButton>button:hover {
-            background: #D4AF37 !important;
-            color: #020617 !important;
-            box-shadow: 0 0 30px rgba(212, 175, 55, 0.6) !important;
-            transform: translateY(-2px);
+            background: #D4AF37 !important; color: #020617 !important;
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.5);
         }
 
-        /* Cyber-Text Inputs */
-        input {
-            background: rgba(0, 0, 0, 0.3) !important;
-            border: 1px solid #1e293b !important;
-            color: #f8fafc !important;
+        /* Scrollable Paper Container */
+        .zoom-container {
+            width:100%; height:800px; overflow:scroll; 
+            border: 1px solid rgba(212, 175, 55, 0.3); background: #000;
         }
         </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. SESSION & AUTH LOGIC (THE "ENGINE")
+# 2. THE HANDWRITING ENGINE
 # ==========================================
-def initialize_session():
-    if 'access_granted' not in st.session_state:
-        st.session_state.access_granted = False
-    if 'current_view' not in st.session_state:
-        st.session_state.current_view = "GATE"
-    if 'user_profile' not in st.session_state:
-        st.session_state.user_profile = None
+def draw_neural_marks(draw, coords, note, w, h, cat):
+    colors = {"error": "#ff3131", "correct": "#39ff14", "info": "#1f51ff"}
+    pen_color = colors.get(cat.lower(), "#ff3131")
+    
+    ymin, xmin, ymax, xmax = coords
+    l, t, r, b = xmin*w/1000, ymin*h/1000, xmax*w/1000, ymax*h/1000
 
-def gateway_interface():
-    inject_cyber_styles()
-    
-    # We use columns to perfectly center the "Obsidian Card"
+    if cat.lower() == "correct":
+        draw.line([l, (t+b)/2, (l+r)/2, b, r, t-20], fill=pen_color, width=10)
+    else:
+        draw.rectangle([l, t, r, b], outline=pen_color, width=6)
+
+    # LOAD IBRAHIM HANDWRITING
+    try:
+        font = ImageFont.truetype("ibrahim_handwriting.ttf", 55)
+    except:
+        font = ImageFont.load_default()
+
+    # Draw Text with slight shadow for 'Ink' feel
+    draw.text((r + 12, t + 2), note, fill="#000", font=font)
+    draw.text((r + 10, t), note, fill=pen_color, font=font)
+
+# ==========================================
+# 3. ROUTING & STATE
+# ==========================================
+if 'auth' not in st.session_state: st.session_state.auth = False
+if 'page' not in st.session_state: st.session_state.page = "GATE"
+
+inject_cyber_styles()
+
+if not st.session_state.auth:
     _, col, _ = st.columns([1, 1.5, 1])
-    
     with col:
         st.markdown('<div class="auth-container">', unsafe_allow_html=True)
         st.markdown('<h1 class="brand-logo">AXOM</h1>', unsafe_allow_html=True)
-        st.markdown('<p style="color: #64748b; font-size: 0.8rem; margin-bottom: 40px;">// SECURE EXAM NEURAL LINK v3.0 //</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color: #64748b; font-size: 0.8rem; margin-bottom: 30px;">// SECURE NEURAL LINK v3.1 //</p>', unsafe_allow_html=True)
         
-        tab_sign_in, tab_sign_up = st.tabs(["SIGN IN", "CREATE ACCOUNT"])
-        
-        with tab_sign_in:
-            st.write("<br>", unsafe_allow_html=True)
-            email = st.text_input("UPLINK ID (Email)", key="login_email")
-            pwd = st.text_input("ACCESS KEY", type="password", key="login_pwd")
-            
-            if st.button("INITIALIZE SESSION", key="btn_login"):
-                if email and pwd: # You can add your specific validation here
-                    with st.spinner("SYNCHRONIZING WITH CLOUD..."):
-                        time.sleep(1.5)
-                        st.session_state.access_granted = True
-                        st.session_state.user_profile = {"email": email}
-                        st.rerun()
-                else:
-                    st.error("CREDENTIALS REQUIRED")
-
-        with tab_sign_up:
-            st.write("<br>", unsafe_allow_html=True)
-            new_name = st.text_input("FULL LEGAL NAME")
-            new_email = st.text_input("PRIMARY EMAIL")
-            new_pwd = st.text_input("CREATE PASSWORD", type="password")
-            
-            if st.button("REGISTER NEURAL ID", key="btn_signup"):
-                st.success("ACCOUNT CREATED. PROCEED TO SIGN IN.")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# ==========================================
-# 3. THE CORE COMMAND CENTER (POST-LOGIN)
-# ==========================================
-def core_dashboard():
-    inject_cyber_styles()
-    
-    # Professional Header (Glassmorphic)
-    st.markdown(f"""
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid rgba(212, 175, 55, 0.3); background: rgba(15, 23, 42, 0.8);">
-            <h2 style="color: #D4AF37; margin:0; letter-spacing: 5px;">AXOM // CMD</h2>
-            <div style="text-align: right;">
-                <span style="color: #39FF14; font-size: 0.7rem;">● UPLINK ACTIVE</span><br>
-                <span style="font-size: 0.8rem;">{st.session_state.user_profile['email']}</span>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # Sidebar Navigation (Clean & Minimal)
-    with st.sidebar:
-        st.markdown("<h3 style='color: #D4AF37;'>NAVIGATION</h3>", unsafe_allow_html=True)
-        if st.button("📄 PAPER CHECKER"): st.session_state.current_view = "CHECKER"
-        if st.button("📊 ANALYTICS"): st.session_state.current_view = "REPORTS"
-        if st.button("🤖 AI MENTOR"): st.session_state.current_view = "AI"
-        st.divider()
-        if st.button("LOGOUT"):
-            st.session_state.access_granted = False
+        # Cleaner SSO Buttons
+        if st.button("SIGN IN WITH GOOGLE"):
+            st.session_state.auth = True
             st.rerun()
-
-    # Routing
-    if st.session_state.current_view == "CHECKER":
-        run_paper_checker_module()
-    else:
-        st.info("Select a protocol from the sidebar.")
-
-def run_paper_checker_module():
-    st.markdown("<h2 style='color: #D4AF37;'>NEURAL PAPER CHECKER</h2>", unsafe_allow_html=True)
-    # [Insert your Marking Vision code here - the draw_cyber_marks function]
-    st.write("Awaiting script upload...")
+        st.write("<p style='font-size: 0.7rem; color: #444;'>OR</p>", unsafe_allow_html=True)
+        if st.button("SIGN IN WITH MICROSOFT"):
+            st.session_state.auth = True
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
 
 # ==========================================
-# EXECUTION BOOTLOADER
+# 4. COMMAND CENTER (POST-LOGIN)
 # ==========================================
-initialize_session()
+# Glass Header
+st.markdown("""
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid rgba(212, 175, 55, 0.2);">
+        <h2 style="color: #D4AF37; margin:0; letter-spacing: 5px;">AXOM // CMD</h2>
+        <div style="color: #39ff14; font-size: 0.8rem;">● SECURE_SESSION_ACTIVE</div>
+    </div>
+""", unsafe_allow_html=True)
 
-if not st.session_state.access_granted:
-    gateway_interface()
-else:
-    core_dashboard()
+with st.sidebar:
+    st.markdown("<h3 style='color: #D4AF37;'>PROTOCOLS</h3>", unsafe_allow_html=True)
+    if st.button("PAPER CHECKER"): st.session_state.page = "CHECKER"
+    if st.button("AI MENTOR"): st.session_state.page = "AI"
+    st.divider()
+    if st.button("TERMINATE"):
+        st.session_state.auth = False
+        st.rerun()
+
+if st.session_state.page == "CHECKER":
+    st.markdown("<h3 style='color: #D4AF37;'>NEURAL MARKING ENGINE</h3>", unsafe_allow_html=True)
+    
+    file = st.file_uploader("UPLOAD SCRIPT", type=['pdf', 'jpg', 'png'])
+    if file:
+        res = st.select_slider("RENDER RESOLUTION", options=["SD", "HD", "4K"])
+        px_w = {"SD": 900, "HD": 1500, "4K": 2500}[res]
+        
+        if st.button("EXECUTE MARKING"):
+            with st.spinner("AI EXAMINER ANALYZING PIXELS..."):
+                # File Processing
+                if file.type == "application/pdf":
+                    img = convert_from_bytes(file.getvalue())[0].convert("RGB")
+                else:
+                    img = Image.open(file).convert("RGB")
+                
+                w, h = img.size
+                draw = ImageDraw.Draw(img)
+
+                # AI Logic
+                model = genai.GenerativeModel('gemini-2.0-flash')
+                resp = model.generate_content(["Analyze and mark this exam paper. Format: [ymin, xmin, ymax, xmax] | category | note", img])
+                
+                # Marking
+                for line in resp.text.split('\n'):
+                    if '|' in line:
+                        match = re.search(r'\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\]', line)
+                        if match:
+                            coords = [int(x) for x in match.groups()]
+                            draw_neural_marks(draw, coords, line.split('|')[2].strip(), w, h, line.split('|')[1].strip())
+
+                # Display
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                st.markdown(f'<div class="zoom-container"><img src="data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}" style="width:{px_w}px;"></div>', unsafe_allow_html=True)
