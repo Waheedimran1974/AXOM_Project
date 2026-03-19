@@ -118,31 +118,70 @@ if st.session_state.role == "Student":
                     st.success("Analysis Complete")
                     st.markdown(response.text)
 
-    with tab2:
-        st.subheader("Interactive AI Assessment")
-        if st.session_state.live_chat is None:
-            st.session_state.live_chat = model.start_chat(history=[])
-            start_msg = f"I am the Senior {st.session_state.subject} Examiner. We will begin the verbal assessment now. Are you ready?"
-            st.session_state.last_ai_msg = start_msg
-            axom_speak(start_msg)
-
-        st.info(f"EXAMINER: {st.session_state.last_ai_msg}")
+  with tab2:
+        st.subheader("AXON LIVE SPEAKING EXAM")
         
-        audio_data = mic_recorder(start_prompt="START RECORDING", stop_prompt="SUBMIT RESPONSE", key='mic')
-        if audio_data:
-            r = sr.Recognizer()
-            audio_file = io.BytesIO(audio_data['bytes'])
-            with sr.AudioFile(audio_file) as source:
-                recorded_audio = r.record(source)
-                user_text = r.recognize_google(recorded_audio)
-                st.write(f"USER: {user_text}")
+        # Initialize Exam State
+        if 'exam_active' not in st.session_state:
+            st.session_state.exam_active = False
+
+        # --- THE COMMAND BUTTON ---
+        if not st.session_state.exam_active:
+            if st.button("START LIVE SPEAKING EXAM", use_container_width=True):
+                st.session_state.exam_active = True
+                st.session_state.live_chat = model.start_chat(history=[])
                 
-                chat_prompt = f"The student said: '{user_text}' in a {st.session_state.subject} context. Correct errors and ask a follow-up question."
-                response = st.session_state.live_chat.send_message(chat_prompt)
-                st.session_state.last_ai_msg = response.text
-                axom_speak(response.text)
+                # Initial Examiner Greeting
+                intro_text = f"Welcome to the AXON Global Speaking Exam for {st.session_state.subject}. I am your Senior Examiner. Please state your name and candidate number to begin."
+                st.session_state.last_ai_msg = intro_text
+                axom_speak(intro_text)
+                st.rerun()
+        else:
+            if st.button("END EXAM & GENERATE REPORT", type="primary", use_container_width=True):
+                st.session_state.exam_active = False
                 st.rerun()
 
+        # --- THE INTERACTION ZONE ---
+        if st.session_state.exam_active:
+            st.info(f"EXAMINER: {st.session_state.last_ai_msg}")
+            
+            # The Mic Recorder acts as the "Live Trigger"
+            audio_data = mic_recorder(
+                start_prompt="LISTEN MODE: ON (Speak Now)",
+                stop_prompt="PROCESS RESPONSE",
+                key='live_mic_stream'
+            )
+
+            if audio_data:
+                with st.spinner("Examiner is evaluating..."):
+                    try:
+                        # 1. Prepare Multimodal Payload (Audio + Instructions)
+                        prompt_instructions = f"""
+                        You are a strict {st.session_state.subject} Examiner. 
+                        1. Listen to the attached audio.
+                        2. Transcribe it internally.
+                        3. If there is a major error, briefly correct it.
+                        4. Ask the next logical exam question.
+                        Maintain a professional, formal tone.
+                        """
+                        
+                        audio_payload = [
+                            {"mime_type": "audio/webm", "data": audio_data['bytes']},
+                            prompt_instructions
+                        ]
+
+                        # 2. Get AI Response
+                        response = st.session_state.live_chat.send_message(audio_payload)
+                        st.session_state.last_ai_msg = response.text
+                        
+                        # 3. Speak the Response Immediately
+                        axom_speak(response.text)
+                        
+                        # 4. Refresh to show new text
+                        st.rerun()
+
+                    except Exception as e:
+                        st.error(f"Connection Interrupted: {e}") 
     with tab3:
         st.subheader("AXON Virtual Suite")
         st.write("Join the encrypted video session for live instruction.")
