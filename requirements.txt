@@ -2,5 +2,4 @@ streamlit
 google-generativeai
 pdf2image
 Pillow
-gTTS
-streamlit-mic-recorder
+streamlit-google-auth
