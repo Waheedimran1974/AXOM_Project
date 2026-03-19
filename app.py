@@ -65,6 +65,7 @@ if 'subject' not in st.session_state: st.session_state.subject = "English"
 if 'history' not in st.session_state: st.session_state.history = []
 if 'live_chat' not in st.session_state: st.session_state.live_chat = None
 if 'last_ai_msg' not in st.session_state: st.session_state.last_ai_msg = ""
+if 'exam_active' not in st.session_state: st.session_state.exam_active = False
 
 # ==========================================
 # 3. AUTHENTICATION INTERFACE
@@ -118,20 +119,15 @@ if st.session_state.role == "Student":
                     st.success("Analysis Complete")
                     st.markdown(response.text)
 
-  with tab2:
+    with tab2:
         st.subheader("AXON LIVE SPEAKING EXAM")
         
-        # Initialize Exam State
-        if 'exam_active' not in st.session_state:
-            st.session_state.exam_active = False
-
         # --- THE COMMAND BUTTON ---
         if not st.session_state.exam_active:
             if st.button("START LIVE SPEAKING EXAM", use_container_width=True):
                 st.session_state.exam_active = True
                 st.session_state.live_chat = model.start_chat(history=[])
                 
-                # Initial Examiner Greeting
                 intro_text = f"Welcome to the AXON Global Speaking Exam for {st.session_state.subject}. I am your Senior Examiner. Please state your name and candidate number to begin."
                 st.session_state.last_ai_msg = intro_text
                 axom_speak(intro_text)
@@ -145,7 +141,6 @@ if st.session_state.role == "Student":
         if st.session_state.exam_active:
             st.info(f"EXAMINER: {st.session_state.last_ai_msg}")
             
-            # The Mic Recorder acts as the "Live Trigger"
             audio_data = mic_recorder(
                 start_prompt="LISTEN MODE: ON (Speak Now)",
                 stop_prompt="PROCESS RESPONSE",
@@ -155,57 +150,22 @@ if st.session_state.role == "Student":
             if audio_data:
                 with st.spinner("Examiner is evaluating..."):
                     try:
-                        # 1. Prepare Multimodal Payload (Audio + Instructions)
-                        prompt_instructions = f"""
-                        You are a strict {st.session_state.subject} Examiner. 
-                        1. Listen to the attached audio.
-                        2. Transcribe it internally.
-                        3. If there is a major error, briefly correct it.
-                        4. Ask the next logical exam question.
-                        Maintain a professional, formal tone.
-                        """
+                        prompt_instructions = f"You are a strict {st.session_state.subject} Examiner. Listen to the audio. Correct errors and ask the next exam question."
                         
                         audio_payload = [
                             {"mime_type": "audio/webm", "data": audio_data['bytes']},
                             prompt_instructions
                         ]
 
-                        # 2. Get AI Response
                         response = st.session_state.live_chat.send_message(audio_payload)
                         st.session_state.last_ai_msg = response.text
-                        
-                        # 3. Speak the Response Immediately
                         axom_speak(response.text)
-                        
-                        # 4. Refresh to show new text
                         st.rerun()
-
                     except Exception as e:
-                        st.error(f"Connection Interrupted: {e}") 
-    
-with tab3:
+                        st.error(f"Connection Interrupted: {e}")
+
+    with tab3:
         st.subheader("AXON Virtual Suite")
         st.write("Join the encrypted video session for live instruction.")
         room_id = f"AXOM-GLOBAL-{st.session_state.subject}-2026"
         jitsi_url = f"https://meet.jit.si/{room_id}#config.startWithAudioMuted=true"
-        
-        if st.button("LAUNCH AXON VIDEO ROOM"):
-            st.components.v1.iframe(jitsi_url, height=700, scrolling=True)
-
-# ==========================================
-# 6. MANAGEMENT INTERFACES
-# ==========================================
-elif st.session_state.role == "Teacher":
-    st.markdown("<div class='portal-header'><h2 style='color: white; margin: 0;'>TEACHER COMMAND CENTER</h2></div>", unsafe_allow_html=True)
-    st.write(f"Managing Subject: {st.session_state.subject}")
-    st.button("GENERATE DEEP STUDENT REPORT")
-    st.button("VIEW PERFORMANCE ANALYTICS")
-
-elif st.session_state.role == "Parent":
-    st.markdown("<div class='portal-header'><h2 style='color: white; margin: 0;'>PARENT DASHBOARD</h2></div>", unsafe_allow_html=True)
-    st.metric(label="Engagement Score", value="94%", delta="Target: Band 8.5")
-    st.info("Live Status: Student is currently active in AXON session.")
-
-# Footer
-st.markdown("---")
-st.markdown("<p style='text-align: center; color: #555; font-size: 0.7rem;'>COPYRIGHT 2026 AXOM GLOBAL EDUCATIONAL SYSTEMS | ALL RIGHTS RESERVED</p>", unsafe_allow_html=True)
