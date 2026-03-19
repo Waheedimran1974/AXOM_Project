@@ -1,9 +1,6 @@
 streamlit
 google-generativeai
-PyMuPDF
+pdf2image
 Pillow
-opencv-python-headless
-numpy
 gTTS
 streamlit-mic-recorder
-SpeechRecognition
