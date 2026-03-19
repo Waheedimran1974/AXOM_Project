@@ -182,7 +182,8 @@ if st.session_state.role == "Student":
 
                     except Exception as e:
                         st.error(f"Connection Interrupted: {e}") 
-    with tab3:
+    
+with tab3:
         st.subheader("AXON Virtual Suite")
         st.write("Join the encrypted video session for live instruction.")
         room_id = f"AXOM-GLOBAL-{st.session_state.subject}-2026"
