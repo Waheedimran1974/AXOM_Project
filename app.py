@@ -167,10 +167,26 @@ current_view = st.session_state.menu_choice
 st.markdown(f"<h3 style='color: #D4AF37;'>ACTIVE MODULE: {current_view}</h3>", unsafe_allow_html=True)
 
 if current_view == "CLASSROOMS":
-    st.info("SECURE AXON CONNECTION ESTABLISHED")
-    room_id = f"AXOM-{st.session_state.subject}-{st.session_state.user_name}"
-    st.components.v1.iframe(f"https://meet.jit.si/{room_id}", height=650)
+    st.markdown("""
+        <div style='background-color: #001F3F; padding: 15px; border-radius: 5px; margin-bottom: 20px;'>
+            <h4 style='margin:0; color: #D4AF37;'>AXON LIVE HD VIDEO PORTAL</h4>
+            <p style='font-size: 0.8rem; color: #ccc;'>Powered by Daily.co Global Mesh Network</p>
+        </div>
+    """, unsafe_allow_html=True)
 
+    # --- CONFIGURATION ---
+    # In production, you would generate these rooms via the Daily API.
+    # For now, use your static room URL from your Daily Dashboard.
+    DAILY_ROOM_URL = "https://axom.daily.co/Main-Classroom" 
+    
+    # Customizing the interface: 
+    # we add parameters to hide the Daily branding and auto-join with the user's name
+    daily_config = f"{DAILY_ROOM_URL}?user_name={st.session_state.user_name}&is_knocking_enabled=true"
+
+    # The Daily Prebuilt UI works beautifully in a 700px height frame
+    st.components.v1.iframe(daily_config, height=700, scrolling=True)
+    
+    st.caption("Tip: Use the 'Background Effects' menu in the bottom bar to maintain a professional study environment.")
 elif current_view == "AI REVISION":
     st.write("VOICE REVISION SYSTEM ACTIVE. SPEAK TO BEGIN YOUR SESSION.")
     audio = mic_recorder(start_prompt="START TALKING", stop_prompt="FINISH REVISION", key='rev_mic')
