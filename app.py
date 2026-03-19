@@ -193,9 +193,68 @@ elif current_view == "AI REVISION":
     # AI logic would process bytes here
 
 elif current_view == "PAPER CHECKER":
-    st.file_uploader("UPLOAD PDF SCRIPT", type=['pdf'])
-    st.button("INITIATE EXAMINER MARKING")
+    st.markdown("<h2 style='color: #D4AF37;'>AXOM VISUAL MARKING SYSTEM</h2>", unsafe_allow_html=True)
+    
+    from PIL import Image, ImageDraw, ImageFont
+    from pdf2image import convert_from_bytes
 
+    uploaded_file = st.file_uploader("UPLOAD EXAM SCRIPT", type=['pdf', 'jpg', 'png'])
+
+    if uploaded_file:
+        if st.button("INITIATE HUMAN-STYLE MARKING"):
+            with st.spinner("AI EXAMINER IS PICKING UP THE RED PEN..."):
+                
+                # 1. Convert PDF to Image (Page 1 for this demo)
+                if uploaded_file.type == "application/pdf":
+                    images = convert_from_bytes(uploaded_file.getvalue())
+                    img = images[0] # Focus on page 1
+                else:
+                    img = Image.open(uploaded_file)
+                
+                # 2. Setup Drawing
+                draw = ImageDraw.Draw(img)
+                width, height = img.size
+
+                # 3. Call Gemini with Spatial Awareness
+                model = genai.GenerativeModel('gemini-2.0-flash')
+                
+                # We ask for coordinates in [ymin, xmin, ymax, xmax] format (0-1000 scale)
+                prompt = """
+                Look at this exam script. Identify exactly 3 technical errors or areas for improvement.
+                For each error, return:
+                1. The normalized coordinates [ymin, xmin, ymax, xmax] of the error.
+                2. A short handwritten-style correction note.
+                Format your response as a list of: [coords], "Note"
+                """
+
+                response = model.generate_content([prompt, img])
+                
+                # 4. Parsing and Drawing (Simplified Simulation of the AI's detection)
+                # In a full build, we use regex to pull the [ymin, xmin...] from response.text
+                # For this demo, I'll show you how the drawing logic works:
+                
+                # Example: Let's say AI found an error at [200, 150, 250, 400]
+                # We convert 0-1000 scale to actual pixel scale:
+                def scale(coord, max_val): return int((coord / 1000) * max_val)
+
+                # --- DRAWING THE 'HUMAN' TOUCH ---
+                # Red Circle around the mistake
+                draw.ellipse([scale(150, width), scale(200, height), scale(400, width), scale(250, height)], outline="red", width=5)
+                
+                # 'Handwritten' Note next to it
+                try:
+                    font = ImageFont.truetype("arial.ttf", 40) # Use a script font if available
+                except:
+                    font = None
+                
+                draw.text((scale(410, width), scale(200, height)), "Check your units here!", fill="red", font=font)
+                
+                # 5. Show the "Marked" Image
+                st.image(img, caption="AXOM SENIOR EXAMINER: MARKED SCRIPT", use_container_width=True)
+                
+                st.markdown("### FULL EXAMINER REPORT")
+                st.write(response.text)
+                
 elif current_view == "REPORT MAP":
     st.info("VISUALIZING PERFORMANCE DATA ACROSS GLOBAL CANDIDATES...")
     # Placeholder for mapping logic
