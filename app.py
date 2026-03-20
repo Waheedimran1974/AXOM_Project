@@ -220,15 +220,15 @@ else:
                             pdf.image(temp_name, x=0, y=0, w=210, h=297)
                             os.remove(temp_name)
                         
-                        final_pdf_bytes = pdf.output()
-                        
-                        st.success(f"ANALYSIS COMPLETE: {total_score}/{total_questions}")
-                        st.download_button(
-                            label="📥 DOWNLOAD CHECKED BY AXOM PDF",
-                            data=final_pdf_bytes,
-                            file_name=f"{uploaded_file.name.replace('.pdf','')}_CHECKED_BY_AXOM.pdf",
-                            mime="application/pdf"
-                        )
+final_pdf_bytes = bytes(pdf.output()) # Convert bytearray to bytes
+
+st.success(f"ANALYSIS COMPLETE: {total_score}/{total_questions}")
+st.download_button(
+    label="📥 DOWNLOAD CHECKED BY AXOM PDF",
+    data=final_pdf_bytes, # Now this is in the correct format
+    file_name=f"{uploaded_file.name.replace('.pdf','')}_CHECKED_BY_AXOM.pdf",
+    mime="application/pdf"
+)
                         
                         archive_data(st.session_state.user_email, f"{total_score}/{total_questions}", "\n".join(full_feedback_log))
 
