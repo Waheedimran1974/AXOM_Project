@@ -76,8 +76,12 @@ def send_neural_key(receiver_email):
 
 def mark_page_visual(image, marks_data):
     draw = ImageDraw.Draw(image)
+    
+    # STABLE TYPING FONT LOGIC
+    font_size = 50
     try:
-        font = ImageFont.truetype("ibrahim_handwriting.ttf", 60)
+        # Standard paths for Linux/Streamlit Cloud servers
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
     except:
         font = ImageFont.load_default()
     
@@ -86,16 +90,23 @@ def mark_page_visual(image, marks_data):
     
     for mark in marks_data:
         x, y = mark.get('x', 50), mark.get('y', 50)
+        icon = "✓" if mark['type'] == 'tick' else "✕"
+        
+        draw.text((x, y), icon, fill=ink_color, font=font)
         if mark['type'] == 'tick':
-            draw.text((x, y), "✓", fill=ink_color, font=font)
             page_ticks += 1
-        else:
-            draw.text((x, y), "✕", fill=ink_color, font=font)
         
         if 'comment' in mark:
             draw.text((x + 70, y), f"- {mark['comment']}", fill=ink_color, font=font)
             
     return image, page_ticks
+
+def get_igcse_grade(percentage):
+    if percentage >= 80: return "A*"
+    if percentage >= 70: return "A"
+    if percentage >= 60: return "B"
+    if percentage >= 50: return "C"
+    return "D/E"
 
 def archive_data(email, score, feedback):
     new_entry = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), email, score, feedback]], 
@@ -165,25 +176,16 @@ else:
                     file_bytes = uploaded_file.read()
                     all_marked_pages = []
                     total_score = 0
-                    total_questions = 0
+                    total_elements = 0
                     full_feedback_log = []
                     
                     try:
                         pages = convert_from_bytes(file_bytes)
                         
                         for i, page_img in enumerate(pages):
-                            prompt = f"""
-                            You are a strict examiner for IGCSE Science. Mark page {i+1} of this script.
-                            Focus on scientific diagrams and text.
-                            Return ONLY a JSON list of dictionaries:
-                            [{{'type': 'tick'|'cross', 'x': int, 'y': int, 'comment': str}}]
-                            If the page is blank, return []. No other text.
-                            """
+                            prompt = f"Mark page {i+1} as a strict IGCSE examiner. Return ONLY a JSON list: [{{'type': 'tick'|'cross', 'x': int, 'y': int, 'comment': str}}]"
                             
-                            response = client.models.generate_content(
-                                model=MODEL_ID,
-                                contents=[prompt, page_img]
-                            )
+                            response = client.models.generate_content(model=MODEL_ID, contents=[prompt, page_img])
                             
                             try:
                                 clean_json = response.text.strip('`').replace('json', '').strip()
@@ -191,47 +193,48 @@ else:
                                 marked_img, p_score = mark_page_visual(page_img, marks_data)
                                 
                                 total_score += p_score
-                                total_questions += len(marks_data)
+                                total_elements += len(marks_data)
                                 all_marked_pages.append(marked_img)
                                 full_feedback_log.append(f"Page {i+1}: {response.text}")
                             except:
                                 all_marked_pages.append(page_img)
 
-                        # --- GENERATE BRANDED PDF ---
+                        # --- PDF GENERATION ---
                         pdf = FPDF()
-                        percentage = (total_score / total_questions * 100) if total_questions > 0 else 0
+                        perc = (total_score / total_elements * 100) if total_elements > 0 else 0
+                        grade = get_igcse_grade(perc)
                         
                         # COVER PAGE
                         pdf.add_page()
                         pdf.set_fill_color(0, 18, 46)
                         pdf.rect(0, 0, 210, 297, 'F')
                         pdf.set_text_color(0, 212, 255)
-                        pdf.set_font("Arial", 'B', 35)
-                        pdf.cell(0, 100, "CHECKED BY AXOM", ln=True, align='C')
-                        pdf.set_font("Arial", 'B', 24)
-                        pdf.cell(0, 20, f"TOTAL MARKS: {total_score} / {total_questions}", ln=True, align='C')
-                        pdf.cell(0, 20, f"PERCENTAGE: {percentage:.1f}%", ln=True, align='C')
+                        pdf.set_font("Arial", 'B', 32)
+                        pdf.cell(0, 80, "CHECKED BY AXOM", ln=True, align='C')
+                        pdf.set_font("Arial", 'B', 20)
+                        pdf.cell(0, 15, f"SCORE: {total_score} / {total_elements}", ln=True, align='C')
+                        pdf.cell(0, 15, f"PERCENTAGE: {perc:.1f}%", ln=True, align='C')
+                        pdf.set_font("Arial", 'B', 40)
+                        pdf.cell(0, 40, f"GRADE: {grade}", ln=True, align='C')
                         
-                        # APPEND PAGES
+                        # APPEND MARKED SCRIPTS
                         for img in all_marked_pages:
                             pdf.add_page()
-                            temp_name = f"temp_{random.randint(1000,9999)}.png"
-                            img.save(temp_name)
-                            pdf.image(temp_name, x=0, y=0, w=210, h=297)
-                            os.remove(temp_name)
+                            t_name = f"tmp_{random.randint(1,999)}.png"
+                            img.save(t_name)
+                            pdf.image(t_name, x=0, y=0, w=210, h=297)
+                            os.remove(t_name)
                         
-                        # Convert bytearray to bytes for Streamlit
-                        final_pdf_bytes = bytes(pdf.output())
+                        final_pdf = bytes(pdf.output())
 
-                        st.success(f"ANALYSIS COMPLETE: {total_score}/{total_questions}")
+                        st.success(f"ANALYSIS COMPLETE | GRADE: {grade}")
                         st.download_button(
-                            label="📥 DOWNLOAD CHECKED BY AXOM PDF",
-                            data=final_pdf_bytes,
-                            file_name=f"{uploaded_file.name.replace('.pdf','')}_CHECKED_BY_AXOM.pdf",
+                            label="📥 DOWNLOAD MARKED SCRIPT",
+                            data=final_pdf,
+                            file_name=f"AXOM_MARKED_{datetime.now().strftime('%H%M%S')}.pdf",
                             mime="application/pdf"
                         )
-                        
-                        archive_data(st.session_state.user_email, f"{total_score}/{total_questions}", "\n".join(full_feedback_log))
+                        archive_data(st.session_state.user_email, f"{grade} ({perc:.1f}%)", "\n".join(full_feedback_log))
 
                     except Exception as e:
                         st.error(f"SYSTEM ERROR: {str(e)}")
@@ -245,5 +248,3 @@ else:
                 st.dataframe(user_data)
             else:
                 st.info("NO ARCHIVED DATA FOUND")
-        else:
-            st.warning("ARCHIVE SYSTEM EMPTY")
