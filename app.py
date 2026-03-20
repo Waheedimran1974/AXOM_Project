@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 import pandas as pd
 import os
 import smtplib
@@ -10,7 +10,7 @@ from email.message import EmailMessage
 import io
 from pdf2image import convert_from_bytes
 
-# --- 1. HUD STYLING (FUTURE ERA) ---
+# --- 1. HUD STYLING ---
 st.set_page_config(page_title="AXOM | NEURAL INTERFACE", layout="wide")
 
 st.markdown("""
@@ -52,17 +52,25 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. BACKEND ENGINES (2026 STABLE) ---
-genai.configure(api_key=st.secrets["GENAI_API_KEY"])
+# --- 2. BACKEND ENGINES ---
+client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
+MODEL_ID = "gemini-2.5-flash"
+HISTORY_FILE = "axom_history.csv"
 
-# This looks for the newest version available to your specific API Key
-try:
-    model = genai.GenerativeModel('gemini-2.0-flash-001') # Latest 2026 Production
-except:
+def send_neural_key(receiver_email):
+    otp = str(random.randint(100000, 999999))
+    msg = EmailMessage()
+    msg.set_content(f"AXOM NEURAL ACCESS KEY: {otp}\nINITIALIZING SECURE LINK...")
+    msg['Subject'] = "AXOM | SECURE ACCESS KEY"
+    msg['From'] = st.secrets["SENDER_EMAIL"]
+    msg['To'] = receiver_email
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest') # Stable Fallback
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(st.secrets["SENDER_EMAIL"], st.secrets["APP_PASSWORD"])
+            server.send_message(msg)
+        return otp
     except:
-        model = genai.GenerativeModel('gemini-pro-vision') # Emergency Legacy
+        return None
 
 def apply_handwriting(image, text, x, y):
     draw = ImageDraw.Draw(image)
@@ -137,32 +145,29 @@ else:
         
         if uploaded_file:
             if st.button("RUN NEURAL ANALYSIS"):
-                with st.spinner("ANALYZING WITH GEMINI 2.0 FLASH..."):
+                with st.spinner("ANALYZING WITH GEMINI 2.5 FLASH..."):
                     file_bytes = uploaded_file.read()
                     
                     try:
                         if uploaded_file.type == "application/pdf":
-                            # Use pdf2image to convert first page
                             images = convert_from_bytes(file_bytes)
                             img = images[0].convert("RGB")
                         else:
-                            # Standard Image Loading
                             img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
                         
-                        # AI PROCESSING
-                        response = model.generate_content(["Mark this paper. Give score/10 and feedback.", img])
+                        response = client.models.generate_content(
+                            model=MODEL_ID,
+                            contents=["Mark this paper for Ibrahim. Give score/10 and feedback.", img]
+                        )
                         ai_feedback = response.text
                         
-                        # Apply Handwriting
                         marked_img = apply_handwriting(img, "NEURAL MARK: " + ai_feedback[:25], 50, 50)
-                        
-                        # Archive
                         archive_data(st.session_state.user_email, "PROCESSED", ai_feedback)
                         
                         st.image(marked_img, caption="NEURAL OVERLAY RESULT")
                         st.success("SESSION DATA ARCHIVED")
                     except Exception as e:
-                        st.error(f"IMAGE ERROR: {str(e)}")
+                        st.error(f"SYSTEM ERROR: {str(e)}")
 
     with tab2:
         st.header("SESSION LOGS")
@@ -173,7 +178,7 @@ else:
             if not user_data.empty:
                 csv_report = user_data.to_csv(index=False).encode('utf-8')
                 st.download_button(
-                    label="📥 DOWNLOAD NEURAL REPORT (CSV)",
+                    label="DOWNLOAD NEURAL REPORT (CSV)",
                     data=csv_report,
                     file_name=f"AXOM_Report_{st.session_state.user_email}.csv",
                     mime="text/csv"
