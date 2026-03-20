@@ -77,19 +77,22 @@ def send_neural_key(receiver_email):
 def mark_page_visual(image, marks_data):
     draw = ImageDraw.Draw(image)
     
-    # STABLE TYPING FONT LOGIC
-    font_size = 50
+    # 1. SMALLER, LIGHTER FONT (More human-like)
+    font_size = 40 
     try:
-        # Standard paths for Linux/Streamlit Cloud servers
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+        # Using Regular instead of Bold for a lighter "pen" look
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
     except:
         font = ImageFont.load_default()
     
-    ink_color = (239, 68, 68) 
+    ink_color = (239, 68, 68) # Examiner Red
     page_ticks = 0
     
     for mark in marks_data:
-        x, y = mark.get('x', 50), mark.get('y', 50)
+        # 2. ADD "HUMAN JITTER" (Slight random offset so it's not perfectly robotic)
+        x = mark.get('x', 50) + random.randint(-5, 5)
+        y = mark.get('y', 50) + random.randint(-5, 5)
+        
         icon = "✓" if mark['type'] == 'tick' else "✕"
         
         draw.text((x, y), icon, fill=ink_color, font=font)
@@ -97,7 +100,8 @@ def mark_page_visual(image, marks_data):
             page_ticks += 1
         
         if 'comment' in mark:
-            draw.text((x + 70, y), f"- {mark['comment']}", fill=ink_color, font=font)
+            # Drawing comment with slightly more breathing room
+            draw.text((x + 60, y), f"- {mark['comment']}", fill=ink_color, font=font)
             
     return image, page_ticks
 
