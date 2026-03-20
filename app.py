@@ -59,14 +59,6 @@ client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 MODEL_ID = "gemini-2.5-flash"
 HISTORY_FILE = "axom_history.csv"
 
-def wrap_text(text, word_limit=10):
-    """Splits text into lines of 10 words each."""
-    words = text.split()
-    lines = []
-    for i in range(0, len(words), word_limit):
-        lines.append(" ".join(words[i:i+word_limit]))
-    return lines
-
 def send_neural_key(receiver_email):
     otp = str(random.randint(100000, 999999))
     msg = EmailMessage()
@@ -83,6 +75,7 @@ def send_neural_key(receiver_email):
         return None
 
 def mark_page_visual(image, marks_data):
+    """Draws ticks/crosses on the image and returns annotation data."""
     draw = ImageDraw.Draw(image)
     font_size = 25 
     try:
@@ -92,7 +85,7 @@ def mark_page_visual(image, marks_data):
     
     ink_color = (239, 68, 68) 
     page_ticks = 0
-    line_spacing = 30 # Vertical gap between wrapped lines
+    annotations_list = []
     
     for mark in marks_data:
         x = mark.get('x', 50) + random.randint(-4, 4)
@@ -104,14 +97,15 @@ def mark_page_visual(image, marks_data):
         if mark['type'] == 'tick':
             page_ticks += 1
         
+        # Save note info to be added as a PDF sticky note later
         if 'comment' in mark:
-            # Wrap the comment to 10 words per line
-            comment_lines = wrap_text(f"- {mark['comment']}", word_limit=10)
-            for i, line in enumerate(comment_lines):
-                # Draw each line below the previous one
-                draw.text((x + 40, y + (i * line_spacing)), line, fill=ink_color, font=font)
+            annotations_list.append({
+                'x': x,
+                'y': y,
+                'text': mark['comment']
+            })
             
-    return image, page_ticks
+    return image, page_ticks, annotations_list
 
 def get_igcse_grade(percentage):
     if percentage >= 80: return "A*"
@@ -130,12 +124,11 @@ def archive_data(email, score, feedback):
         df = new_entry
     df.to_csv(HISTORY_FILE, index=False)
 
-# --- 3. SESSION LOGIC ---
+# --- 3. INTERFACE LOGIC ---
 if "auth_step" not in st.session_state:
     st.session_state.auth_step = "identify"
     st.session_state.logged_in = False
 
-# --- 4. INTERFACE ---
 if not st.session_state.logged_in:
     st.markdown("<br><br>", unsafe_allow_html=True)
     _, col2, _ = st.columns([1, 2, 1])
@@ -153,7 +146,7 @@ if not st.session_state.logged_in:
                         st.session_state.auth_step = "verify"
                         st.rerun()
                     else:
-                        st.error("COMMS ERROR: CHECK CONFIGURATION")
+                        st.error("COMMS ERROR")
 
         elif st.session_state.auth_step == "verify":
             st.title("VERIFY LINK")
@@ -165,7 +158,7 @@ if not st.session_state.logged_in:
                     st.session_state.user_email = st.session_state.temp_email
                     st.rerun()
                 else:
-                    st.error("ACCESS DENIED: INVALID KEY")
+                    st.error("ACCESS DENIED")
         st.markdown('</div>', unsafe_allow_html=True)
 
 else:
@@ -189,32 +182,10 @@ else:
                     all_marked_pages = []
                     total_score = 0
                     total_elements = 0
-                    full_feedback_log = []
                     
                     try:
                         pages = convert_from_bytes(file_bytes)
-                        
-                        for i, page_img in enumerate(pages):
-                            prompt = f"Mark page {i+1} as a strict IGCSE examiner. Return ONLY a JSON list: [{{'type': 'tick'|'cross', 'x': int, 'y': int, 'comment': str}}]"
-                            
-                            response = client.models.generate_content(model=MODEL_ID, contents=[prompt, page_img])
-                            
-                            try:
-                                clean_json = response.text.strip('`').replace('json', '').strip()
-                                marks_data = json.loads(clean_json)
-                                marked_img, p_score = mark_page_visual(page_img, marks_data)
-                                
-                                total_score += p_score
-                                total_elements += len(marks_data)
-                                all_marked_pages.append(marked_img)
-                                full_feedback_log.append(f"Page {i+1}: {response.text}")
-                            except:
-                                all_marked_pages.append(page_img)
-
-                        # --- PDF GENERATION ---
                         pdf = FPDF()
-                        perc = (total_score / total_elements * 100) if total_elements > 0 else 0
-                        grade = get_igcse_grade(perc)
                         
                         # COVER PAGE
                         pdf.add_page()
@@ -223,40 +194,39 @@ else:
                         pdf.set_text_color(0, 212, 255)
                         pdf.set_font("Arial", 'B', 32)
                         pdf.cell(0, 80, "CHECKED BY AXOM", ln=True, align='C')
-                        pdf.set_font("Arial", 'B', 20)
-                        pdf.cell(0, 15, f"SCORE: {total_score} / {total_elements}", ln=True, align='C')
-                        pdf.cell(0, 15, f"PERCENTAGE: {perc:.1f}%", ln=True, align='C')
-                        pdf.set_font("Arial", 'B', 40)
-                        pdf.cell(0, 40, f"GRADE: {grade}", ln=True, align='C')
-                        
-                        # APPEND MARKED SCRIPTS
-                        for img in all_marked_pages:
-                            pdf.add_page()
-                            t_name = f"tmp_{random.randint(1,999)}.png"
-                            img.save(t_name)
-                            pdf.image(t_name, x=0, y=0, w=210, h=297)
-                            os.remove(t_name)
-                        
-                        final_pdf = bytes(pdf.output())
 
-                        st.success(f"ANALYSIS COMPLETE | GRADE: {grade}")
-                        st.download_button(
-                            label="📥 DOWNLOAD MARKED SCRIPT",
-                            data=final_pdf,
-                            file_name=f"AXOM_MARKED_{datetime.now().strftime('%H%M%S')}.pdf",
-                            mime="application/pdf"
-                        )
-                        archive_data(st.session_state.user_email, f"{grade} ({perc:.1f}%)", "\n".join(full_feedback_log))
+                        for i, page_img in enumerate(pages):
+                            prompt = f"Mark page {i+1} as a strict IGCSE examiner. Return ONLY a JSON list: [{{'type': 'tick'|'cross', 'x': int, 'y': int, 'comment': str}}]"
+                            response = client.models.generate_content(model=MODEL_ID, contents=[prompt, page_img])
+                            
+                            try:
+                                clean_json = response.text.strip('`').replace('json', '').strip()
+                                marks_data = json.loads(clean_json)
+                                marked_img, p_score, page_notes = mark_page_visual(page_img, marks_data)
+                                
+                                total_score += p_score
+                                total_elements += len(marks_data)
+                                
+                                # Convert marked image to PDF page
+                                pdf.add_page()
+                                t_name = f"tmp_{i}.png"
+                                marked_img.save(t_name)
+                                pdf.image(t_name, x=0, y=0, w=210, h=297)
+                                os.remove(t_name)
+                                
+                                # ADD STICKY NOTES (Scaling coordinates to mm)
+                                for note in page_notes:
+                                    # Pillow px to A4 mm scaling approx: (x / img_width) * 210
+                                    scaled_x = (note['x'] / marked_img.width) * 210
+                                    scaled_y = (note['y'] / marked_img.height) * 297
+                                    pdf.text_annotation(x=scaled_x, y=scaled_y, text=note['text'])
+                                    
+                            except:
+                                pdf.add_page() # Fallback blank if JSON fails
+
+                        final_pdf = bytes(pdf.output())
+                        st.success("ANALYSIS COMPLETE")
+                        st.download_button("📥 DOWNLOAD ANNOTATED SCRIPT", data=final_pdf, file_name="AXOM_STICKY_NOTES.pdf", mime="application/pdf")
 
                     except Exception as e:
                         st.error(f"SYSTEM ERROR: {str(e)}")
-
-    with tab2:
-        st.header("SESSION LOGS")
-        if os.path.exists(HISTORY_FILE):
-            df = pd.read_csv(HISTORY_FILE)
-            user_data = df[df['Email'] == st.session_state.user_email]
-            if not user_data.empty:
-                st.dataframe(user_data)
-            else:
-                st.info("NO ARCHIVED DATA FOUND")
