@@ -204,3 +204,35 @@ with col_right:
                     st.error(f"Analysis failed: {e}")
     else:
         st.info("Please upload a student script to begin.")
+        # --- THE PERMANENT MEMORY SYSTEM ---
+HISTORY_FILE = "axom_history.csv"
+
+def save_to_history(student_email, error, correction):
+    # Create a new row of data
+    new_data = pd.DataFrame([[student_email, error, correction]], 
+                            columns=["Email", "Error", "Correction"])
+    
+    # If the file exists, add to it. If not, create it.
+    if os.path.exists(HISTORY_FILE):
+        history_df = pd.read_csv(HISTORY_FILE)
+        history_df = pd.concat([history_df, new_data], ignore_index=True)
+    else:
+        history_df = new_data
+    
+    # Save it back to the system
+    history_df.to_csv(HISTORY_FILE, index=False)
+
+# --- THE FLASHCARD INTERFACE ---
+def show_flashcards(email):
+    if os.path.exists(HISTORY_FILE):
+        df = pd.read_csv(HISTORY_FILE)
+        user_history = df[df['Email'] == email]
+        
+        if not user_history.empty:
+            st.subheader("🗂️ Ibrahim's Revision Cards")
+            for index, row in user_history.tail(5).iterrows(): # Show last 5
+                with st.container():
+                    st.info(f"**Mistake:** {row['Error']}")
+                    st.success(f"**Correction:** {row['Correction']}")
+        else:
+            st.write("No history found for this user yet.")
