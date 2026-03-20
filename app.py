@@ -59,6 +59,14 @@ client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 MODEL_ID = "gemini-2.5-flash"
 HISTORY_FILE = "axom_history.csv"
 
+def wrap_text(text, word_limit=10):
+    """Splits text into lines of 10 words each."""
+    words = text.split()
+    lines = []
+    for i in range(0, len(words), word_limit):
+        lines.append(" ".join(words[i:i+word_limit]))
+    return lines
+
 def send_neural_key(receiver_email):
     otp = str(random.randint(100000, 999999))
     msg = EmailMessage()
@@ -76,32 +84,32 @@ def send_neural_key(receiver_email):
 
 def mark_page_visual(image, marks_data):
     draw = ImageDraw.Draw(image)
-    
-    # 1. SMALLER FONT SIZE (25) FOR CLEANER MARKING
     font_size = 25 
     try:
-        # Using Regular instead of Bold for a lighter "pen" look
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
     except:
         font = ImageFont.load_default()
     
-    ink_color = (239, 68, 68) # Examiner Red
+    ink_color = (239, 68, 68) 
     page_ticks = 0
+    line_spacing = 30 # Vertical gap between wrapped lines
     
     for mark in marks_data:
-        # 2. HUMAN JITTER (Slight random offset)
         x = mark.get('x', 50) + random.randint(-4, 4)
         y = mark.get('y', 50) + random.randint(-4, 4)
         
         icon = "✓" if mark['type'] == 'tick' else "✕"
-        
         draw.text((x, y), icon, fill=ink_color, font=font)
+        
         if mark['type'] == 'tick':
             page_ticks += 1
         
         if 'comment' in mark:
-            # Drawing comment with slightly more breathing room
-            draw.text((x + 40, y), f"- {mark['comment']}", fill=ink_color, font=font)
+            # Wrap the comment to 10 words per line
+            comment_lines = wrap_text(f"- {mark['comment']}", word_limit=10)
+            for i, line in enumerate(comment_lines):
+                # Draw each line below the previous one
+                draw.text((x + 40, y + (i * line_spacing)), line, fill=ink_color, font=font)
             
     return image, page_ticks
 
