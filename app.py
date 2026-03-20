@@ -8,6 +8,9 @@ import smtplib
 from email.mime.text import MIMEText
 from PIL import Image, ImageDraw, ImageFont
 from pdf2image import convert_from_bytes
+import streamlit as st
+import pandas as pd
+import os
 
 # ==========================================
 # 1. SECURE CONFIGURATION
