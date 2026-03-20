@@ -10,6 +10,7 @@ from email.message import EmailMessage
 import io
 import json
 from pdf2image import convert_from_bytes
+from fpdf import FPDF
 
 # --- 1. HUD STYLING ---
 st.set_page_config(page_title="AXOM | NEURAL INTERFACE", layout="wide")
@@ -73,40 +74,31 @@ def send_neural_key(receiver_email):
     except:
         return None
 
-# Unified Handwriting & Marking Engine
-def mark_script(image, marks_data):
-    """
-    Applies your font (ticks/crosses/comments) based on AI coordinate data.
-    """
+def mark_page_visual(image, marks_data):
     draw = ImageDraw.Draw(image)
     try:
-        # Load your specific writing font
         font = ImageFont.truetype("ibrahim_handwriting.ttf", 60)
     except:
         font = ImageFont.load_default()
-
-    # Red Ink for Examiner
-    ink_color = (239, 68, 68) # Standard examiner red
-
-    # Marks data is expected to be a list of dicts: [{'type': 'tick', 'x': 100, 'y': 200, 'comment': 'Good point'}]
+    
+    ink_color = (239, 68, 68) 
+    page_ticks = 0
+    
     for mark in marks_data:
-        x, y = mark['x'], mark['y']
-        
-        # 1. Place the Icon
+        x, y = mark.get('x', 50), mark.get('y', 50)
         if mark['type'] == 'tick':
             draw.text((x, y), "✓", fill=ink_color, font=font)
-        elif mark['type'] == 'cross':
+            page_ticks += 1
+        else:
             draw.text((x, y), "✕", fill=ink_color, font=font)
         
-        # 2. Add any associated comment right next to the icon
         if 'comment' in mark:
-            # Shift comment slightly to the right of the icon
             draw.text((x + 70, y), f"- {mark['comment']}", fill=ink_color, font=font)
             
-    return image
+    return image, page_ticks
 
-def archive_data(email, feedback):
-    new_entry = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), email, "MARKED", feedback]], 
+def archive_data(email, score, feedback):
+    new_entry = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), email, score, feedback]], 
                              columns=["Date", "Email", "Score", "Feedback"])
     if os.path.exists(HISTORY_FILE):
         df = pd.read_csv(HISTORY_FILE)
@@ -165,60 +157,81 @@ else:
 
     with tab1:
         st.header("DOCUMENT SCAN")
-        uploaded_file = st.file_uploader("UPLOAD SCRIPT", type=['png', 'jpg', 'jpeg', 'pdf'])
+        uploaded_file = st.file_uploader("UPLOAD SCRIPT", type=['pdf'])
         
         if uploaded_file:
             if st.button("RUN FULL NEURAL ANALYSIS"):
                 with st.spinner("EXAMINING ENTIRE DOCUMENT..."):
                     file_bytes = uploaded_file.read()
-                    all_feedback = []
+                    all_marked_pages = []
+                    total_score = 0
+                    total_questions = 0
+                    full_feedback_log = []
                     
                     try:
-                        # 1. Convert ALL pages to images
-                        if uploaded_file.type == "application/pdf":
-                            pages = convert_from_bytes(file_bytes)
-                        else:
-                            pages = [Image.open(io.BytesIO(file_bytes)).convert("RGB")]
+                        pages = convert_from_bytes(file_bytes)
                         
-                        # 2. Loop through every page
                         for i, page_img in enumerate(pages):
-                            st.subheader(f"Analyzing Page {i+1}...")
-                            
-                            # AI Analysis to generate COORDINATE-BASED markings
                             prompt = f"""
-                            You are a strict examiner for IGCSE Biology/Physics. Mark page {i+1} of this script.
+                            You are a strict examiner for IGCSE Science. Mark page {i+1} of this script.
                             Focus on scientific diagrams and text.
-                            Return your marking in a precise JSON list of dictionaries like this example format:
-                            [{{'type': 'tick', 'x': 500, 'y': 300, 'comment': 'Correct label for Mitochondria'}}, {{'type': 'cross', 'x': 700, 'y': 450, 'comment': 'Units missing'}}]
-                            Provide the (x,y) coordinates where the icon should be drawn on the original image (0,0 is top left). 
-                            If the entire page is blank, return an empty list: [].
-                            Return ONLY the JSON list, no introductory text.
+                            Return ONLY a JSON list of dictionaries:
+                            [{{'type': 'tick'|'cross', 'x': int, 'y': int, 'comment': str}}]
+                            If the page is blank, return []. No other text.
                             """
                             
                             response = client.models.generate_content(
                                 model=MODEL_ID,
                                 contents=[prompt, page_img]
                             )
-                            page_ai_data_str = response.text
-                            all_feedback.append(f"Page {i+1} Data: {page_ai_data_str}")
                             
                             try:
-                                # Clean and Parse JSON from Gemini
-                                clean_json_str = page_ai_data_str.strip('`').replace('json', '').strip()
-                                marks_data = json.loads(clean_json_str)
+                                clean_json = response.text.strip('`').replace('json', '').strip()
+                                marks_data = json.loads(clean_json)
+                                marked_img, p_score = mark_page_visual(page_img, marks_data)
                                 
-                                # 3. Draw your font and icons onto this page
-                                marked_page = mark_script(page_img, marks_data)
-                                st.image(marked_page, caption=f"EXAMINER OVERLAY: PAGE {i+1}")
-                                
-                            except json.JSONDecodeError:
-                                st.warning(f"Failed to parse AI data for page {i+1}. Skipping visual marks.")
+                                total_score += p_score
+                                total_questions += len(marks_data)
+                                all_marked_pages.append(marked_img)
+                                full_feedback_log.append(f"Page {i+1}: {response.text}")
+                            except:
+                                all_marked_pages.append(page_img)
+
+                        # --- GENERATE BRANDED PDF ---
+                        pdf = FPDF()
+                        percentage = (total_score / total_questions * 100) if total_questions > 0 else 0
                         
-                        # 4. Final Archive
-                        full_report = "\n".join(all_feedback)
-                        archive_data(st.session_state.user_email, full_report)
-                        st.success("FULL DOCUMENT ARCHIVED")
+                        # COVER PAGE
+                        pdf.add_page()
+                        pdf.set_fill_color(0, 18, 46)
+                        pdf.rect(0, 0, 210, 297, 'F')
+                        pdf.set_text_color(0, 212, 255)
+                        pdf.set_font("Arial", 'B', 35)
+                        pdf.cell(0, 100, "CHECKED BY AXOM", ln=True, align='C')
+                        pdf.set_font("Arial", 'B', 24)
+                        pdf.cell(0, 20, f"TOTAL MARKS: {total_score} / {total_questions}", ln=True, align='C')
+                        pdf.cell(0, 20, f"PERCENTAGE: {percentage:.1f}%", ln=True, align='C')
                         
+                        # APPEND PAGES
+                        for img in all_marked_pages:
+                            pdf.add_page()
+                            temp_name = f"temp_{random.randint(1000,9999)}.png"
+                            img.save(temp_name)
+                            pdf.image(temp_name, x=0, y=0, w=210, h=297)
+                            os.remove(temp_name)
+                        
+                        final_pdf_bytes = pdf.output()
+                        
+                        st.success(f"ANALYSIS COMPLETE: {total_score}/{total_questions}")
+                        st.download_button(
+                            label="📥 DOWNLOAD CHECKED BY AXOM PDF",
+                            data=final_pdf_bytes,
+                            file_name=f"{uploaded_file.name.replace('.pdf','')}_CHECKED_BY_AXOM.pdf",
+                            mime="application/pdf"
+                        )
+                        
+                        archive_data(st.session_state.user_email, f"{total_score}/{total_questions}", "\n".join(full_feedback_log))
+
                     except Exception as e:
                         st.error(f"SYSTEM ERROR: {str(e)}")
 
@@ -227,15 +240,7 @@ else:
         if os.path.exists(HISTORY_FILE):
             df = pd.read_csv(HISTORY_FILE)
             user_data = df[df['Email'] == st.session_state.user_email]
-            
             if not user_data.empty:
-                csv_report = user_data.to_csv(index=False).encode('utf-8')
-                st.download_button("DOWNLOAD FULL REPORT", csv_report, "AXOM_Full_Log.csv", "text/csv")
-                
-                for _, row in user_data.tail(5).iterrows():
-                    with st.expander(f"Session: {row['Date']}"):
-                        st.write(row['Feedback'])
+                st.dataframe(user_data)
             else:
                 st.info("NO ARCHIVED DATA FOUND")
-        else:
-            st.warning("ARCHIVE SYSTEM EMPTY")
