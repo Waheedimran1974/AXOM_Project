@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw, ImageFont
 from datetime import datetime
 from email.message import EmailMessage
 import io
+import json
 from pdf2image import convert_from_bytes
 
 # --- 1. HUD STYLING ---
@@ -72,18 +73,40 @@ def send_neural_key(receiver_email):
     except:
         return None
 
-def apply_handwriting(image, text, x, y):
+# Unified Handwriting & Marking Engine
+def mark_script(image, marks_data):
+    """
+    Applies your font (ticks/crosses/comments) based on AI coordinate data.
+    """
     draw = ImageDraw.Draw(image)
     try:
+        # Load your specific writing font
         font = ImageFont.truetype("ibrahim_handwriting.ttf", 60)
     except:
         font = ImageFont.load_default()
-    # Neon Pink/Red Mark
-    draw.text((x, y), text, fill=(255, 0, 85), font=font) 
+
+    # Red Ink for Examiner
+    ink_color = (239, 68, 68) # Standard examiner red
+
+    # Marks data is expected to be a list of dicts: [{'type': 'tick', 'x': 100, 'y': 200, 'comment': 'Good point'}]
+    for mark in marks_data:
+        x, y = mark['x'], mark['y']
+        
+        # 1. Place the Icon
+        if mark['type'] == 'tick':
+            draw.text((x, y), "✓", fill=ink_color, font=font)
+        elif mark['type'] == 'cross':
+            draw.text((x, y), "✕", fill=ink_color, font=font)
+        
+        # 2. Add any associated comment right next to the icon
+        if 'comment' in mark:
+            # Shift comment slightly to the right of the icon
+            draw.text((x + 70, y), f"- {mark['comment']}", fill=ink_color, font=font)
+            
     return image
 
 def archive_data(email, feedback):
-    new_entry = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), email, "MULTIPAGE", feedback]], 
+    new_entry = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), email, "MARKED", feedback]], 
                              columns=["Date", "Email", "Score", "Feedback"])
     if os.path.exists(HISTORY_FILE):
         df = pd.read_csv(HISTORY_FILE)
@@ -161,18 +184,35 @@ else:
                         for i, page_img in enumerate(pages):
                             st.subheader(f"Analyzing Page {i+1}...")
                             
-                            # AI Analysis for this specific page
+                            # AI Analysis to generate COORDINATE-BASED markings
+                            prompt = f"""
+                            You are a strict examiner for IGCSE Biology/Physics. Mark page {i+1} of this script.
+                            Focus on scientific diagrams and text.
+                            Return your marking in a precise JSON list of dictionaries like this example format:
+                            [{{'type': 'tick', 'x': 500, 'y': 300, 'comment': 'Correct label for Mitochondria'}}, {{'type': 'cross', 'x': 700, 'y': 450, 'comment': 'Units missing'}}]
+                            Provide the (x,y) coordinates where the icon should be drawn on the original image (0,0 is top left). 
+                            If the entire page is blank, return an empty list: [].
+                            Return ONLY the JSON list, no introductory text.
+                            """
+                            
                             response = client.models.generate_content(
                                 model=MODEL_ID,
-                                contents=[f"You are a world-class examiner. Mark page {i+1} of this script. Be precise with scientific diagrams and text.", page_img]
+                                contents=[prompt, page_img]
                             )
-                            page_feedback = response.text
-                            all_feedback.append(f"Page {i+1}: {page_feedback}")
+                            page_ai_data_str = response.text
+                            all_feedback.append(f"Page {i+1} Data: {page_ai_data_str}")
                             
-                            # 3. Apply handwriting to this page
-                            # We put a summary mark at the top
-                            marked_page = apply_handwriting(page_img, f"PG {i+1} MARKED", 50, 50)
-                            st.image(marked_page, caption=f"NEURAL OVERLAY: PAGE {i+1}")
+                            try:
+                                # Clean and Parse JSON from Gemini
+                                clean_json_str = page_ai_data_str.strip('`').replace('json', '').strip()
+                                marks_data = json.loads(clean_json_str)
+                                
+                                # 3. Draw your font and icons onto this page
+                                marked_page = mark_script(page_img, marks_data)
+                                st.image(marked_page, caption=f"EXAMINER OVERLAY: PAGE {i+1}")
+                                
+                            except json.JSONDecodeError:
+                                st.warning(f"Failed to parse AI data for page {i+1}. Skipping visual marks.")
                         
                         # 4. Final Archive
                         full_report = "\n".join(all_feedback)
@@ -197,3 +237,5 @@ else:
                         st.write(row['Feedback'])
             else:
                 st.info("NO ARCHIVED DATA FOUND")
+        else:
+            st.warning("ARCHIVE SYSTEM EMPTY")
