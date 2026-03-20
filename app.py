@@ -1,87 +1,189 @@
 import streamlit as st
+import google.generativeai as genai
+import pandas as pd
+import os
 import smtplib
 import random
-import google.generativeai as genai
+from PIL import Image, ImageDraw, ImageFont
+from datetime import datetime
 from email.message import EmailMessage
 
-# --- HUD STYLING (THE FUTURE ERA LOOK) ---
+# --- 1. HUD STYLING (THE FUTURE ERA LOOK) ---
+st.set_page_config(page_title="AXOM | NEURAL INTERFACE", layout="wide")
+
 st.markdown("""
     <style>
-    .stApp { background: #00050d; color: #00d4ff; }
+    /* Main Background */
+    .stApp {
+        background: radial-gradient(circle, #00122e 0%, #00050d 100%);
+        color: #00d4ff;
+        font-family: 'Courier New', monospace;
+    }
+    
+    /* Futuristic Frame for Login */
     .future-frame {
         border: 2px solid #00d4ff;
         border-radius: 10px;
         padding: 40px;
         background: rgba(0, 20, 46, 0.9);
         box-shadow: 0 0 30px rgba(0, 212, 255, 0.2);
+        text-align: center;
     }
-    .stButton>button { width: 100%; border: 1px solid #00d4ff; background: transparent; color: #00d4ff; }
+    
+    /* Buttons */
+    .stButton>button {
+        width: 100%;
+        background: transparent;
+        color: #00d4ff;
+        border: 1px solid #00d4ff;
+        border-radius: 5px;
+        transition: 0.3s;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+    .stButton>button:hover {
+        background: #00d4ff;
+        color: #000;
+        box-shadow: 0 0 15px #00d4ff;
+    }
+    
+    /* Inputs */
+    .stTextInput>div>div>input {
+        background: rgba(0, 0, 0, 0.5);
+        color: #00d4ff;
+        border: 1px solid #00d4ff;
+    }
+    
+    h1, h2, h3 {
+        color: #00d4ff !important;
+        text-shadow: 0 0 10px #00d4ff;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- OTP ENGINE ---
+# --- 2. BACKEND ENGINES ---
+# Initialize Gemini 2.0 Flash
+genai.configure(api_key=st.secrets["GENAI_API_KEY"])
+model = genai.GenerativeModel('gemini-2.0-flash')
+HISTORY_FILE = "axom_history.csv"
+
 def send_neural_key(receiver_email):
+    """Sends a 6-digit OTP via Gmail"""
     otp = str(random.randint(100000, 999999))
     msg = EmailMessage()
-    msg.set_content(f"Your AXOM Neural Access Key is: {otp}")
+    msg.set_content(f"AXOM NEURAL ACCESS KEY: {otp}\n\nThis key is for single-session initialization.")
     msg['Subject'] = "AXOM | SECURE ACCESS KEY"
     msg['From'] = st.secrets["SENDER_EMAIL"]
     msg['To'] = receiver_email
-
+    
     try:
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login(st.secrets["SENDER_EMAIL"], st.secrets["APP_PASSWORD"])
-        server.send_message(msg)
-        server.quit()
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(st.secrets["SENDER_EMAIL"], st.secrets["APP_PASSWORD"])
+            server.send_message(msg)
         return otp
-    except Exception as e:
-        st.error("COMMS FAILURE: UNABLE TO SEND KEY")
+    except:
         return None
 
-# --- LOGIN INTERFACE ---
+def apply_handwriting(image, text, x, y):
+    """Applies your custom font in Neon Pink/Red"""
+    draw = ImageDraw.Draw(image)
+    try:
+        font = ImageFont.truetype("ibrahim_handwriting.ttf", 45)
+    except:
+        font = ImageFont.load_default()
+    # Neon marking color
+    draw.text((x, y), text, fill=(255, 0, 85), font=font) 
+    return image
+
+def archive_data(email, score, feedback):
+    """Saves session data to CSV"""
+    new_entry = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), email, score, feedback]], 
+                             columns=["Date", "Email", "Score", "Feedback"])
+    if os.path.exists(HISTORY_FILE):
+        df = pd.read_csv(HISTORY_FILE)
+        df = pd.concat([df, new_entry], ignore_index=True)
+    else:
+        df = new_entry
+    df.to_csv(HISTORY_FILE, index=False)
+
+# --- 3. SESSION STATE CONTROL ---
 if "auth_step" not in st.session_state:
     st.session_state.auth_step = "identify"
     st.session_state.logged_in = False
 
+# --- 4. INTERFACE ---
 if not st.session_state.logged_in:
-    col1, col2, col3 = st.columns([1, 2, 1])
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    _, col2, _ = st.columns([1, 2, 1])
+    
     with col2:
         st.markdown('<div class="future-frame">', unsafe_allow_html=True)
         
-        # STEP 1: Identification
         if st.session_state.auth_step == "identify":
             st.title("AXOM INTERFACE")
-            email = st.text_input("INPUT USER ID (EMAIL)")
+            st.write("IDENTIFICATION REQUIRED")
+            email_in = st.text_input("INPUT EMAIL ID")
             if st.button("REQUEST NEURAL KEY"):
                 with st.spinner("TRANSMITTING..."):
-                    key = send_neural_key(email)
-                    if key:
-                        st.session_state.generated_key = key
-                        st.session_state.temp_email = email
+                    otp = send_neural_key(email_in)
+                    if otp:
+                        st.session_state.generated_otp = otp
+                        st.session_state.temp_email = email_in
                         st.session_state.auth_step = "verify"
                         st.rerun()
+                    else:
+                        st.error("COMMS ERROR: CHECK APP PASSWORD")
 
-        # STEP 2: Verification
         elif st.session_state.auth_step == "verify":
-            st.title("VERIFY IDENTITY")
+            st.title("VERIFY LINK")
             st.write(f"KEY SENT TO: {st.session_state.temp_email}")
-            user_key = st.text_input("ENTER 6-DIGIT KEY", type="password")
-            if st.button("INITIALIZE LINK"):
-                if user_key == st.session_state.generated_key:
+            otp_in = st.text_input("ENTER 6-DIGIT KEY", type="password")
+            if st.button("INITIALIZE SESSION"):
+                if otp_in == st.session_state.generated_otp:
                     st.session_state.logged_in = True
                     st.session_state.user_email = st.session_state.temp_email
-                    st.success("LINK ESTABLISHED")
                     st.rerun()
                 else:
-                    st.error("INVALID KEY: ACCESS DENIED")
+                    st.error("ACCESS DENIED: INVALID KEY")
         
         st.markdown('</div>', unsafe_allow_html=True)
 
 else:
-    # --- REST OF YOUR APP (Marking/History) ---
-    st.title("AXOM | MAIN TERMINAL")
-    st.write(f"LINK ACTIVE: {st.session_state.user_email}")
+    # MAIN APP INTERFACE
+    st.sidebar.title("AXOM STATUS")
+    st.sidebar.write("LINK: SECURE")
+    st.sidebar.write(f"ID: {st.session_state.user_email}")
     if st.sidebar.button("TERMINATE SESSION"):
         st.session_state.logged_in = False
         st.session_state.auth_step = "identify"
         st.rerun()
+
+    tab1, tab2 = st.tabs(["NEURAL SCANNER", "DATA ARCHIVE"])
+
+    with tab1:
+        st.header("DOCUMENT SCAN")
+        uploaded_file = st.file_uploader("UPLOAD SCRIPT (PNG/JPG/PDF)", type=['png', 'jpg', 'jpeg', 'pdf'])
+        
+        if uploaded_file:
+            if st.button("RUN NEURAL ANALYSIS"):
+                with st.spinner("ANALYZING WITH GEMINI 2.0 FLASH..."):
+                    img = Image.open(uploaded_file).convert("RGB")
+                    # Gemini 2.0 Flash is extremely fast for this task
+                    response = model.generate_content(["Provide a grade and short feedback for this English paper.", img])
+                    ai_feedback = response.text
+                    
+                    # Overlay handwriting
+                    marked_img = apply_handwriting(img, "NEURAL MARK: " + ai_feedback[:30], 50, 50)
+                    archive_data(st.session_state.user_email, "PROCESSED", ai_feedback)
+                    
+                    st.image(marked_img, caption="NEURAL OVERLAY RESULT")
+                    st.success("SESSION DATA ARCHIVED")
+
+    with tab2:
+        st.header("SESSION LOGS")
+        if os.path.exists(HISTORY_FILE):
+            df = pd.read_csv(HISTORY_FILE)
+            user_data = df[df['Email'] == st.session_state.user_email]
+            
+            if not user_data.empty:
+                for _, row in user_data.tail(10).iterrows():
