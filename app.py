@@ -75,14 +75,15 @@ def send_neural_key(receiver_email):
 def apply_handwriting(image, text, x, y):
     draw = ImageDraw.Draw(image)
     try:
-        font = ImageFont.truetype("ibrahim_handwriting.ttf", 45)
+        font = ImageFont.truetype("ibrahim_handwriting.ttf", 60)
     except:
         font = ImageFont.load_default()
+    # Neon Pink/Red Mark
     draw.text((x, y), text, fill=(255, 0, 85), font=font) 
     return image
 
-def archive_data(email, score, feedback):
-    new_entry = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), email, score, feedback]], 
+def archive_data(email, feedback):
+    new_entry = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), email, "MULTIPAGE", feedback]], 
                              columns=["Date", "Email", "Score", "Feedback"])
     if os.path.exists(HISTORY_FILE):
         df = pd.read_csv(HISTORY_FILE)
@@ -144,28 +145,40 @@ else:
         uploaded_file = st.file_uploader("UPLOAD SCRIPT", type=['png', 'jpg', 'jpeg', 'pdf'])
         
         if uploaded_file:
-            if st.button("RUN NEURAL ANALYSIS"):
-                with st.spinner("ANALYZING WITH GEMINI 2.5 FLASH..."):
+            if st.button("RUN FULL NEURAL ANALYSIS"):
+                with st.spinner("EXAMINING ENTIRE DOCUMENT..."):
                     file_bytes = uploaded_file.read()
+                    all_feedback = []
                     
                     try:
+                        # 1. Convert ALL pages to images
                         if uploaded_file.type == "application/pdf":
-                            images = convert_from_bytes(file_bytes)
-                            img = images[0].convert("RGB")
+                            pages = convert_from_bytes(file_bytes)
                         else:
-                            img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+                            pages = [Image.open(io.BytesIO(file_bytes)).convert("RGB")]
                         
-                        response = client.models.generate_content(
-                            model=MODEL_ID,
-                            contents=["Mark this paper for Ibrahim. Give score/10 and feedback.", img]
-                        )
-                        ai_feedback = response.text
+                        # 2. Loop through every page
+                        for i, page_img in enumerate(pages):
+                            st.subheader(f"Analyzing Page {i+1}...")
+                            
+                            # AI Analysis for this specific page
+                            response = client.models.generate_content(
+                                model=MODEL_ID,
+                                contents=[f"You are a world-class examiner. Mark page {i+1} of this script. Be precise with scientific diagrams and text.", page_img]
+                            )
+                            page_feedback = response.text
+                            all_feedback.append(f"Page {i+1}: {page_feedback}")
+                            
+                            # 3. Apply handwriting to this page
+                            # We put a summary mark at the top
+                            marked_page = apply_handwriting(page_img, f"PG {i+1} MARKED", 50, 50)
+                            st.image(marked_page, caption=f"NEURAL OVERLAY: PAGE {i+1}")
                         
-                        marked_img = apply_handwriting(img, "NEURAL MARK: " + ai_feedback[:25], 50, 50)
-                        archive_data(st.session_state.user_email, "PROCESSED", ai_feedback)
+                        # 4. Final Archive
+                        full_report = "\n".join(all_feedback)
+                        archive_data(st.session_state.user_email, full_report)
+                        st.success("FULL DOCUMENT ARCHIVED")
                         
-                        st.image(marked_img, caption="NEURAL OVERLAY RESULT")
-                        st.success("SESSION DATA ARCHIVED")
                     except Exception as e:
                         st.error(f"SYSTEM ERROR: {str(e)}")
 
@@ -177,22 +190,10 @@ else:
             
             if not user_data.empty:
                 csv_report = user_data.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="DOWNLOAD NEURAL REPORT (CSV)",
-                    data=csv_report,
-                    file_name=f"AXOM_Report_{st.session_state.user_email}.csv",
-                    mime="text/csv"
-                )
-                st.markdown("---")
+                st.download_button("DOWNLOAD FULL REPORT", csv_report, "AXOM_Full_Log.csv", "text/csv")
                 
-                for _, row in user_data.tail(10).iterrows():
-                    st.markdown(f"""
-                    <div style="border: 1px solid #00d4ff; padding: 15px; border-radius: 5px; margin-bottom: 10px; background: rgba(0, 212, 255, 0.05);">
-                        <span style="color: #00d4ff; font-size: 0.8rem;">{row['Date']}</span><br>
-                        <span style="color: #ffffff;">{row['Feedback']}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+                for _, row in user_data.tail(5).iterrows():
+                    with st.expander(f"Session: {row['Date']}"):
+                        st.write(row['Feedback'])
             else:
                 st.info("NO ARCHIVED DATA FOUND")
-        else:
-            st.warning("ARCHIVE SYSTEM EMPTY")
