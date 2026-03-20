@@ -3,7 +3,6 @@ import google.generativeai as genai
 import re
 import io
 import base64
-import time
 import random
 import smtplib
 from email.mime.text import MIMEText
@@ -11,67 +10,87 @@ from PIL import Image, ImageDraw, ImageFont
 from pdf2image import convert_from_bytes
 
 # ==========================================
-# 1. SECURE CONFIGURATION (PULLS FROM SECRETS)
+# 1. SECURE CONFIGURATION
 # ==========================================
 try:
     SENDER_EMAIL = st.secrets["SENDER_EMAIL"]
     APP_PASSWORD = st.secrets["APP_PASSWORD"]
     GENAI_API_KEY = st.secrets["GENAI_API_KEY"]
-    
     genai.configure(api_key=GENAI_API_KEY)
-except Exception as e:
-    st.error("⚠️ SYSTEM CONFIGURATION MISSING: Please add SENDER_EMAIL, APP_PASSWORD, and GENAI_API_KEY to your Streamlit Secrets.")
+except Exception:
+    st.error("Secrets not configured in Streamlit Cloud.")
     st.stop()
 
 # ==========================================
-# 2. UI DESIGN (ENTERPRISE MINIMALIST)
+# 2. GLASSMORPHISM UI TEMPLATE
 # ==========================================
-st.set_page_config(page_title="AXOM | Neural Terminal", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="AXOM | Neural", layout="wide", initial_sidebar_state="collapsed")
 
-def inject_enterprise_styles():
+def apply_glass_theme():
     st.markdown("""
         <style>
-        .stApp { background-color: #fafafa; color: #111827; font-family: 'Inter', sans-serif; }
-        
-        /* Auth Card */
-        .auth-card {
-            max-width: 400px; margin: 80px auto; padding: 40px;
-            background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05); text-align: center;
+        /* Modern Gradient Background */
+        .stApp {
+            background: radial-gradient(circle at top right, #f8fafc, #e2e8f0);
+            color: #1e293b;
+            font-family: 'Inter', sans-serif;
         }
-        .brand-text { font-size: 2.8rem; font-weight: 800; color: #111827; letter-spacing: -1px; margin-bottom: 5px; }
         
-        /* Buttons */
+        /* Glass Effect Card */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+            margin: 40px auto;
+            max-width: 450px;
+            text-align: center;
+        }
+
+        .brand {
+            font-size: 3.5rem;
+            font-weight: 900;
+            background: linear-gradient(to right, #0f172a, #334155);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0px;
+        }
+
+        /* Modernized Buttons */
         .stButton>button {
-            width: 100%; background-color: #111827 !important; color: #ffffff !important;
-            border: none !important; border-radius: 8px !important; padding: 14px !important;
-            font-weight: 600 !important; transition: 0.2s;
+            background: #0f172a !important;
+            color: white !important;
+            border-radius: 12px !important;
+            padding: 12px 24px !important;
+            font-weight: 500 !important;
+            border: none !important;
+            transition: all 0.3s ease;
+            width: 100%;
         }
-        .stButton>button:hover { background-color: #374151 !important; transform: translateY(-1px); }
-        
-        /* Inputs */
-        input { border-radius: 8px !important; border: 1px solid #d1d5db !important; padding: 12px !important; }
-        
-        /* Dashboard */
-        .header-bar {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 15px 40px; background: #ffffff; border-bottom: 1px solid #e5e7eb; margin-bottom: 30px;
+        .stButton>button:hover {
+            background: #334155 !important;
+            transform: scale(1.02);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
-        .zoom-container {
-            width:100%; height:850px; overflow:scroll; border: 1px solid #e5e7eb; 
-            background: #f3f4f6; border-radius: 8px;
-        }
+
+        /* Hide Streamlit Elements */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
         </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. UTILITY FUNCTIONS
+# 3. BACKEND ENGINES
 # ==========================================
-def send_otp(target_email, code):
-    msg = MIMEText(f"Your AXOM secure login code is: {code}\n\nDo not share this code.")
-    msg['Subject'] = 'AXOM Security Code'
-    msg['From'] = f"AXOM Admin <{SENDER_EMAIL}>"
-    msg['To'] = target_email
+def send_otp_mail(email, code):
+    msg = MIMEText(f"Your AXOM Access Code: {code}")
+    msg['Subject'] = 'AXOM Security'
+    msg['From'] = f"AXOM <{SENDER_EMAIL}>"
+    msg['To'] = email
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(SENDER_EMAIL, APP_PASSWORD)
@@ -79,46 +98,106 @@ def send_otp(target_email, code):
         return True
     except: return False
 
-def draw_neural_marks(draw, coords, note, w, h, cat):
-    # Professional marking colors
-    color = "#16a34a" if "correct" in cat.lower() else "#dc2626"
+def apply_neural_overlay(draw, coords, note, w, h, cat):
+    color = "#059669" if "correct" in cat.lower() else "#e11d48"
     ymin, xmin, ymax, xmax = coords
     l, t, r, b = xmin*w/1000, ymin*h/1000, xmax*w/1000, ymax*h/1000
-
-    # Draw Logic
-    if "correct" in cat.lower():
-        draw.line([l, (t+b)/2, (l+r)/2, b, r, t-20], fill=color, width=8)
-    else:
-        draw.rectangle([l, t, r, b], outline=color, width=5)
-
-    # Handwriting Placement
-    try:
-        font = ImageFont.truetype("ibrahim_handwriting.ttf", 55)
-    except:
-        font = ImageFont.load_default()
     
-    # Text shadow for 'ink' look
-    draw.text((r + 17, t + 2), note, fill="#00000033", font=font)
+    if "correct" in cat.lower():
+        draw.line([l, (t+b)/2, (l+r)/2, b, r, t-20], fill=color, width=7)
+    else:
+        draw.rectangle([l, t, r, b], outline=color, width=4)
+
+    try: font = ImageFont.truetype("ibrahim_handwriting.ttf", 55)
+    except: font = ImageFont.load_default()
     draw.text((r + 15, t), note, fill=color, font=font)
 
 # ==========================================
-# 4. AUTHENTICATION FLOW
+# 4. APP LOGIC & ROUTING
 # ==========================================
-if 'status' not in st.session_state: st.session_state.status = "OUT"
-if 'user' not in st.session_state: st.session_state.user = ""
-if 'otp' not in st.session_state: st.session_state.otp = ""
+if 'view' not in st.session_state: st.session_state.view = "LOGIN"
+if 'user_mail' not in st.session_state: st.session_state.user_mail = ""
+if 'session_otp' not in st.session_state: st.session_state.session_otp = ""
 
-inject_enterprise_styles()
+apply_glass_theme()
 
-if st.session_state.status != "IN":
-    _, col, _ = st.columns([1, 1.2, 1])
-    with col:
-        st.markdown('<div class="auth-card">', unsafe_allow_html=True)
-        st.markdown('<div class="brand-text">AXOM</div>', unsafe_allow_html=True)
-        st.markdown('<p style="color:#6b7280; margin-bottom:30px;">ENTERPRISE GRADING TERMINAL</p>', unsafe_allow_html=True)
+# --- LOGIN SCREEN ---
+if st.session_state.view != "DASHBOARD":
+    _, center_col, _ = st.columns([1, 1.5, 1])
+    with center_col:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown('<h1 class="brand">AXOM</h1>', unsafe_allow_html=True)
+        st.markdown('<p style="color:#64748b; margin-bottom:2rem;">Intelligence for Educators</p>', unsafe_allow_html=True)
 
-        if st.session_state.status == "OUT":
-            email_in = st.text_input("Work Email", placeholder="teacher@school.edu")
-            if st.button("Continue"):
-                if "@" in email_in and "." in email_in:
-                    code =
+        if st.session_state.view == "LOGIN":
+            u_email = st.text_input("Institutional Email", placeholder="name@school.com", label_visibility="collapsed")
+            if st.button("Request Access"):
+                if "@" in u_email:
+                    otp_code = str(random.randint(100000, 999999))
+                    st.session_state.session_otp = otp_code
+                    st.session_state.user_mail = u_email
+                    if send_otp_mail(u_email, otp_code):
+                        st.session_state.view = "OTP_VERIFY"
+                        st.rerun()
+                else: st.error("Please enter a valid email.")
+
+        elif st.session_state.view == "OTP_VERIFY":
+            st.write(f"Verifying {st.session_state.user_mail}...")
+            otp_in = st.text_input("Enter 6-Digit Code", max_chars=6, label_visibility="collapsed")
+            if st.button("Authenticate"):
+                if otp_in == st.session_state.session_otp:
+                    st.session_state.view = "DASHBOARD"
+                    st.rerun()
+                else: st.error("Incorrect code.")
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
+
+# --- DASHBOARD SCREEN ---
+st.markdown(f"""
+    <div style="display:flex; justify-content:space-between; align-items:center; padding: 20px 5%;">
+        <h2 style="margin:0; font-weight:900; letter-spacing:-1px;">AXOM.ai</h2>
+        <div style="background:white; padding:8px 16px; border-radius:50px; border:1px solid #e2e8f0; font-size:0.8rem;">
+            {st.session_state.user_mail}
+        </div>
+    </div>
+""", unsafe_allow_html=True)
+
+# Main Interaction Area
+col_left, col_right = st.columns([1, 3])
+
+with col_left:
+    st.markdown("### Control Panel")
+    file = st.file_uploader("Drop script here", type=['pdf', 'jpg', 'png'])
+    quality = st.select_slider("Marking Detail", options=["Draft", "Standard", "HD"], value="Standard")
+    if st.button("Logout"):
+        st.session_state.clear()
+        st.rerun()
+
+with col_right:
+    if file:
+        if st.button("Run AI Examination", type="primary"):
+            with st.spinner("Analyzing handwriting..."):
+                if file.type == "application/pdf":
+                    img = convert_from_bytes(file.getvalue())[0].convert("RGB")
+                else:
+                    img = Image.open(file).convert("RGB")
+                
+                w, h = img.size
+                draw = ImageDraw.Draw(img)
+                
+                model = genai.GenerativeModel('gemini-2.0-flash')
+                prompt = "Mark this exam paper. Format: [ymin, xmin, ymax, xmax] | category (correct/error) | note"
+                
+                try:
+                    resp = model.generate_content([prompt, img])
+                    for line in resp.text.split('\n'):
+                        if '|' in line:
+                            m = re.search(r'\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\]', line)
+                            if m:
+                                apply_neural_overlay(draw, [int(x) for x in m.groups()], line.split('|')[2].strip(), w, h, line.split('|')[1].strip())
+                    
+                    st.image(img, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Analysis failed: {e}")
+    else:
+        st.info("Please upload a student script to begin.")
