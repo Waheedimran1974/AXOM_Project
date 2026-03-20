@@ -9,6 +9,7 @@ from datetime import datetime
 from email.message import EmailMessage
 import io
 from pdf2image import convert_from_bytes
+
 # --- 1. HUD STYLING (FUTURE ERA) ---
 st.set_page_config(page_title="AXOM | NEURAL INTERFACE", layout="wide")
 
@@ -138,36 +139,39 @@ else:
 
     tab1, tab2 = st.tabs(["NEURAL SCANNER", "DATA ARCHIVE"])
 
-  with tab1:
+    with tab1:
         st.header("DOCUMENT SCAN")
         uploaded_file = st.file_uploader("UPLOAD SCRIPT", type=['png', 'jpg', 'jpeg', 'pdf'])
         
         if uploaded_file:
             if st.button("RUN NEURAL ANALYSIS"):
                 with st.spinner("ANALYZING WITH GEMINI 2.0 FLASH..."):
-                    # --- STABLE IMAGE LOADING ---
                     file_bytes = uploaded_file.read()
                     
-                    if uploaded_file.type == "application/pdf":
-                        # Convert PDF to Image (First page only)
-                        images = convert_from_bytes(file_bytes)
-                        img = images[0].convert("RGB")
-                    else:
-                        # Standard Image Loading
-                        img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
-                    
-                    # --- AI PROCESSING ---
-                    response = model.generate_content(["Mark this paper. Give score/10 and feedback.", img])
-                    ai_feedback = response.text
-                    
-                    # Apply Handwriting
-                    marked_img = apply_handwriting(img, "NEURAL MARK: " + ai_feedback[:25], 50, 50)
-                    
-                    # Archive
-                    archive_data(st.session_state.user_email, "PROCESSED", ai_feedback)
-                    
-                    st.image(marked_img, caption="NEURAL OVERLAY RESULT")
-                    st.success("SESSION DATA ARCHIVED")
+                    try:
+                        if uploaded_file.type == "application/pdf":
+                            # Use pdf2image to convert first page
+                            images = convert_from_bytes(file_bytes)
+                            img = images[0].convert("RGB")
+                        else:
+                            # Standard Image Loading
+                            img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+                        
+                        # AI PROCESSING
+                        response = model.generate_content(["Mark this paper. Give score/10 and feedback.", img])
+                        ai_feedback = response.text
+                        
+                        # Apply Handwriting
+                        marked_img = apply_handwriting(img, "NEURAL MARK: " + ai_feedback[:25], 50, 50)
+                        
+                        # Archive
+                        archive_data(st.session_state.user_email, "PROCESSED", ai_feedback)
+                        
+                        st.image(marked_img, caption="NEURAL OVERLAY RESULT")
+                        st.success("SESSION DATA ARCHIVED")
+                    except Exception as e:
+                        st.error(f"IMAGE ERROR: {str(e)}")
+
     with tab2:
         st.header("SESSION LOGS")
         if os.path.exists(HISTORY_FILE):
@@ -175,7 +179,6 @@ else:
             user_data = df[df['Email'] == st.session_state.user_email]
             
             if not user_data.empty:
-                # --- NEW DOWNLOAD BUTTON ---
                 csv_report = user_data.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="📥 DOWNLOAD NEURAL REPORT (CSV)",
@@ -184,7 +187,6 @@ else:
                     mime="text/csv"
                 )
                 st.markdown("---")
-                # ---------------------------
                 
                 for _, row in user_data.tail(10).iterrows():
                     st.markdown(f"""
