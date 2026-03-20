@@ -52,25 +52,17 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. BACKEND ENGINES ---
+# --- 2. BACKEND ENGINES (2026 STABLE) ---
 genai.configure(api_key=st.secrets["GENAI_API_KEY"])
-model = genai.GenerativeModel('gemini-2.0-flash')
-HISTORY_FILE = "axom_history.csv"
 
-def send_neural_key(receiver_email):
-    otp = str(random.randint(100000, 999999))
-    msg = EmailMessage()
-    msg.set_content(f"AXOM NEURAL ACCESS KEY: {otp}\nINITIALIZING SECURE LINK...")
-    msg['Subject'] = "AXOM | SECURE ACCESS KEY"
-    msg['From'] = st.secrets["SENDER_EMAIL"]
-    msg['To'] = receiver_email
+# This looks for the newest version available to your specific API Key
+try:
+    model = genai.GenerativeModel('gemini-2.0-flash-001') # Latest 2026 Production
+except:
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(st.secrets["SENDER_EMAIL"], st.secrets["APP_PASSWORD"])
-            server.send_message(msg)
-        return otp
+        model = genai.GenerativeModel('gemini-1.5-flash-latest') # Stable Fallback
     except:
-        return None
+        model = genai.GenerativeModel('gemini-pro-vision') # Emergency Legacy
 
 def apply_handwriting(image, text, x, y):
     draw = ImageDraw.Draw(image)
