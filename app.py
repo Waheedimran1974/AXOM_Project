@@ -38,7 +38,7 @@ st.title("AXOM | Neural Examiner")
 # Sidebar Login
 with st.sidebar:
     st.header("Teacher Login")
-    user_email = st.text_input("Enter Email", placeholder="ibrahim@example.com")
+    user_email = st.text_input("Enter Email", placeholder="name@example.com")
     is_logged_in = st.button("Access AXOM")
 
 if is_logged_in:
