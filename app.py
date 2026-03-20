@@ -77,8 +77,8 @@ def send_neural_key(receiver_email):
 def mark_page_visual(image, marks_data):
     draw = ImageDraw.Draw(image)
     
-    # 1. SMALLER, LIGHTER FONT (More human-like)
-    font_size = 40 
+    # 1. SMALLER FONT SIZE (25) FOR CLEANER MARKING
+    font_size = 25 
     try:
         # Using Regular instead of Bold for a lighter "pen" look
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
@@ -89,9 +89,9 @@ def mark_page_visual(image, marks_data):
     page_ticks = 0
     
     for mark in marks_data:
-        # 2. ADD "HUMAN JITTER" (Slight random offset so it's not perfectly robotic)
-        x = mark.get('x', 50) + random.randint(-5, 5)
-        y = mark.get('y', 50) + random.randint(-5, 5)
+        # 2. HUMAN JITTER (Slight random offset)
+        x = mark.get('x', 50) + random.randint(-4, 4)
+        y = mark.get('y', 50) + random.randint(-4, 4)
         
         icon = "✓" if mark['type'] == 'tick' else "✕"
         
@@ -101,7 +101,7 @@ def mark_page_visual(image, marks_data):
         
         if 'comment' in mark:
             # Drawing comment with slightly more breathing room
-            draw.text((x + 60, y), f"- {mark['comment']}", fill=ink_color, font=font)
+            draw.text((x + 40, y), f"- {mark['comment']}", fill=ink_color, font=font)
             
     return image, page_ticks
 
