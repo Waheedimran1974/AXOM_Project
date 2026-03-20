@@ -1,10 +1,8 @@
-streamlit
-google-generativeai
-gspread
-google-auth
+streamlit>=1.35.0
+google-genai>=0.8.3
+pandas
 Pillow
 pdf2image
-pandas
-pdfrw
-google-genai
-PIL.ImageDraw
+fpdf2
+gspread
+google-auth
