@@ -156,7 +156,19 @@ else:
         if os.path.exists(HISTORY_FILE):
             df = pd.read_csv(HISTORY_FILE)
             user_data = df[df['Email'] == st.session_state.user_email]
+            
             if not user_data.empty:
+                # --- NEW DOWNLOAD BUTTON ---
+                csv_report = user_data.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 DOWNLOAD NEURAL REPORT (CSV)",
+                    data=csv_report,
+                    file_name=f"AXOM_Report_{st.session_state.user_email}.csv",
+                    mime="text/csv"
+                )
+                st.markdown("---")
+                # ---------------------------
+                
                 for _, row in user_data.tail(10).iterrows():
                     st.markdown(f"""
                     <div style="border: 1px solid #00d4ff; padding: 15px; border-radius: 5px; margin-bottom: 10px; background: rgba(0, 212, 255, 0.05);">
