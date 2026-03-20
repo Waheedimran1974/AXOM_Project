@@ -14,7 +14,7 @@ from pdf2image import convert_from_bytes
 # 1. ENTERPRISE CONFIG & SYSTEM PREFS
 # ==========================================
 # ⚠️ ADMIN: CONFIG YOUR EMAIL ROUTING HERE ⚠️
-SENDER_EMAIL = "YOUR_EMAIL@gmail.com" 
+SENDER_EMAIL = "dearhussain12@gmail.com" 
 APP_PASSWORD = "drjlaihoavuaktnm" 
 GENAI_API_KEY = "YOUR_GEMINI_API_KEY"
 
