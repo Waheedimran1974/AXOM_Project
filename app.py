@@ -75,11 +75,12 @@ def send_neural_key(receiver_email):
         return None
 
 def mark_page_visual(image, marks_data):
-    """Draws ticks/crosses on the image and returns annotation data."""
     draw = ImageDraw.Draw(image)
-    font_size = 25 
+    
+    # INCREASED SIZE FOR MARKS (60 for visibility)
+    mark_font_size = 60 
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", mark_font_size)
     except:
         font = ImageFont.load_default()
     
@@ -88,8 +89,8 @@ def mark_page_visual(image, marks_data):
     annotations_list = []
     
     for mark in marks_data:
-        x = mark.get('x', 50) + random.randint(-4, 4)
-        y = mark.get('y', 50) + random.randint(-4, 4)
+        x = mark.get('x', 50) + random.randint(-5, 5)
+        y = mark.get('y', 50) + random.randint(-5, 5)
         
         icon = "✓" if mark['type'] == 'tick' else "✕"
         draw.text((x, y), icon, fill=ink_color, font=font)
@@ -97,7 +98,7 @@ def mark_page_visual(image, marks_data):
         if mark['type'] == 'tick':
             page_ticks += 1
         
-        # Save note info to be added as a PDF sticky note later
+        # Keep annotation data separate (Sticky note size is handled by PDF viewer, not font)
         if 'comment' in mark:
             annotations_list.append({
                 'x': x,
@@ -114,21 +115,12 @@ def get_igcse_grade(percentage):
     if percentage >= 50: return "C"
     return "D/E"
 
-def archive_data(email, score, feedback):
-    new_entry = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d %H:%M"), email, score, feedback]], 
-                             columns=["Date", "Email", "Score", "Feedback"])
-    if os.path.exists(HISTORY_FILE):
-        df = pd.read_csv(HISTORY_FILE)
-        df = pd.concat([df, new_entry], ignore_index=True)
-    else:
-        df = new_entry
-    df.to_csv(HISTORY_FILE, index=False)
-
-# --- 3. INTERFACE LOGIC ---
+# --- 3. SESSION LOGIC ---
 if "auth_step" not in st.session_state:
     st.session_state.auth_step = "identify"
     st.session_state.logged_in = False
 
+# --- 4. INTERFACE ---
 if not st.session_state.logged_in:
     st.markdown("<br><br>", unsafe_allow_html=True)
     _, col2, _ = st.columns([1, 2, 1])
@@ -179,7 +171,6 @@ else:
             if st.button("RUN FULL NEURAL ANALYSIS"):
                 with st.spinner("EXAMINING ENTIRE DOCUMENT..."):
                     file_bytes = uploaded_file.read()
-                    all_marked_pages = []
                     total_score = 0
                     total_elements = 0
                     
@@ -214,19 +205,28 @@ else:
                                 pdf.image(t_name, x=0, y=0, w=210, h=297)
                                 os.remove(t_name)
                                 
-                                # ADD STICKY NOTES (Scaling coordinates to mm)
+                                # ADD STICKY NOTES
                                 for note in page_notes:
-                                    # Pillow px to A4 mm scaling approx: (x / img_width) * 210
                                     scaled_x = (note['x'] / marked_img.width) * 210
                                     scaled_y = (note['y'] / marked_img.height) * 297
                                     pdf.text_annotation(x=scaled_x, y=scaled_y, text=note['text'])
                                     
                             except:
-                                pdf.add_page() # Fallback blank if JSON fails
+                                pdf.add_page()
 
                         final_pdf = bytes(pdf.output())
-                        st.success("ANALYSIS COMPLETE")
-                        st.download_button("📥 DOWNLOAD ANNOTATED SCRIPT", data=final_pdf, file_name="AXOM_STICKY_NOTES.pdf", mime="application/pdf")
+                        
+                        # CUSTOM FILENAME LOGIC
+                        original_name = uploaded_file.name.replace(".pdf", "")
+                        download_name = f"{original_name}_checked by AXOM.pdf"
+
+                        st.success(f"ANALYSIS COMPLETE: {total_score}/{total_elements}")
+                        st.download_button(
+                            label="📥 DOWNLOAD CHECKED SCRIPT", 
+                            data=final_pdf, 
+                            file_name=download_name, 
+                            mime="application/pdf"
+                        )
 
                     except Exception as e:
                         st.error(f"SYSTEM ERROR: {str(e)}")
