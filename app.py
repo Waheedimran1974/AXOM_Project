@@ -57,7 +57,6 @@ st.markdown("""
 # --- 2. BACKEND ENGINES ---
 client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 MODEL_ID = "gemini-2.5-flash"
-HISTORY_FILE = "axom_history.csv"
 
 def send_neural_key(receiver_email):
     otp = str(random.randint(100000, 999999))
@@ -76,8 +75,6 @@ def send_neural_key(receiver_email):
 
 def mark_page_visual(image, marks_data):
     draw = ImageDraw.Draw(image)
-    
-    # INCREASED SIZE FOR MARKS (60 for visibility)
     mark_font_size = 60 
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", mark_font_size)
@@ -98,22 +95,10 @@ def mark_page_visual(image, marks_data):
         if mark['type'] == 'tick':
             page_ticks += 1
         
-        # Keep annotation data separate (Sticky note size is handled by PDF viewer, not font)
         if 'comment' in mark:
-            annotations_list.append({
-                'x': x,
-                'y': y,
-                'text': mark['comment']
-            })
+            annotations_list.append({'x': x, 'y': y, 'text': mark['comment']})
             
     return image, page_ticks, annotations_list
-
-def get_igcse_grade(percentage):
-    if percentage >= 80: return "A*"
-    if percentage >= 70: return "A"
-    if percentage >= 60: return "B"
-    if percentage >= 50: return "C"
-    return "D/E"
 
 # --- 3. SESSION LOGIC ---
 if "auth_step" not in st.session_state:
@@ -154,8 +139,15 @@ if not st.session_state.logged_in:
         st.markdown('</div>', unsafe_allow_html=True)
 
 else:
+    # --- SIDEBAR: EXAM DETAILS ---
     st.sidebar.title("AXOM STATUS")
-    st.sidebar.write(f"USER: {st.session_state.user_email}")
+    st.sidebar.write(f"ACTIVE: {st.session_state.user_email}")
+    
+    st.sidebar.markdown("---")
+    exam_board = st.sidebar.text_input("ENTER EXAM BOARD", placeholder="e.g. Cambridge / IGCSE")
+    subject_info = st.sidebar.text_input("ENTER EXAM CODE / SUBJECT", placeholder="e.g. 0580 Mathematics")
+    st.sidebar.markdown("---")
+    
     if st.sidebar.button("TERMINATE SESSION"):
         st.session_state.logged_in = False
         st.session_state.auth_step = "identify"
@@ -178,16 +170,28 @@ else:
                         pages = convert_from_bytes(file_bytes)
                         pdf = FPDF()
                         
-                        # COVER PAGE
+                        # --- ENHANCED COVER PAGE ---
                         pdf.add_page()
                         pdf.set_fill_color(0, 18, 46)
                         pdf.rect(0, 0, 210, 297, 'F')
                         pdf.set_text_color(0, 212, 255)
+                        
                         pdf.set_font("Arial", 'B', 32)
-                        pdf.cell(0, 80, "CHECKED BY AXOM", ln=True, align='C')
+                        pdf.cell(0, 60, "CHECKED BY AXOM", ln=True, align='C')
+                        
+                        pdf.set_font("Arial", 'B', 16)
+                        if exam_board:
+                            pdf.cell(0, 10, f"BOARD: {exam_board.upper()}", ln=True, align='C')
+                        if subject_info:
+                            pdf.cell(0, 10, f"SUBJECT: {subject_info.upper()}", ln=True, align='C')
+                            
+                        pdf.ln(20)
+                        pdf.set_font("Arial", 'I', 12)
+                        pdf.cell(0, 10, f"DATE: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align='C')
 
                         for i, page_img in enumerate(pages):
-                            prompt = f"Mark page {i+1} as a strict IGCSE examiner. Return ONLY a JSON list: [{{'type': 'tick'|'cross', 'x': int, 'y': int, 'comment': str}}]"
+                            # Incorporate Subject Info into the AI prompt for better marking accuracy
+                            prompt = f"Mark page {i+1} of this {subject_info} {exam_board} paper as a strict examiner. Return ONLY a JSON list: [{{'type': 'tick'|'cross', 'x': int, 'y': int, 'comment': str}}]"
                             response = client.models.generate_content(model=MODEL_ID, contents=[prompt, page_img])
                             
                             try:
@@ -198,29 +202,26 @@ else:
                                 total_score += p_score
                                 total_elements += len(marks_data)
                                 
-                                # Convert marked image to PDF page
                                 pdf.add_page()
                                 t_name = f"tmp_{i}.png"
                                 marked_img.save(t_name)
                                 pdf.image(t_name, x=0, y=0, w=210, h=297)
                                 os.remove(t_name)
                                 
-                                # ADD STICKY NOTES
                                 for note in page_notes:
                                     scaled_x = (note['x'] / marked_img.width) * 210
                                     scaled_y = (note['y'] / marked_img.height) * 297
                                     pdf.text_annotation(x=scaled_x, y=scaled_y, text=note['text'])
-                                    
                             except:
                                 pdf.add_page()
 
                         final_pdf = bytes(pdf.output())
                         
-                        # CUSTOM FILENAME LOGIC
+                        # CUSTOM FILENAME
                         original_name = uploaded_file.name.replace(".pdf", "")
                         download_name = f"{original_name}_checked by AXOM.pdf"
 
-                        st.success(f"ANALYSIS COMPLETE: {total_score}/{total_elements}")
+                        st.success(f"ANALYSIS COMPLETE: {total_score}/{total_elements} MARKS FOUND")
                         st.download_button(
                             label="📥 DOWNLOAD CHECKED SCRIPT", 
                             data=final_pdf, 
