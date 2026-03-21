@@ -12,7 +12,7 @@ import json
 from pdf2image import convert_from_bytes
 from fpdf import FPDF
 
-# --- 1. HUD STYLING ---
+# --- 1. HUD STYLING (AXOM NEURAL THEME) ---
 st.set_page_config(page_title="AXOM | NEURAL INTERFACE", layout="wide")
 
 st.markdown("""
@@ -42,15 +42,17 @@ st.markdown("""
     }
     .stButton>button:hover {
         background: #00d4ff;
-        color: #000;
+        color: #000 !important;
         box-shadow: 0 0 15px #00d4ff;
     }
     .stTextInput>div>div>input {
-        background: rgba(0, 0, 0, 0.5);
-        color: #00d4ff;
-        border: 1px solid #00d4ff;
+        background: rgba(0, 0, 0, 0.5) !important;
+        color: #00d4ff !important;
+        border: 1px solid #00d4ff !important;
     }
     h1, h2, h3 { color: #00d4ff !important; text-shadow: 0 0 10px #00d4ff; }
+    .stTabs [data-baseweb="tab-list"] { background-color: transparent; }
+    .stTabs [data-baseweb="tab"] { color: #00d4ff; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -59,6 +61,7 @@ client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 MODEL_ID = "gemini-2.5-flash"
 
 def send_neural_key(receiver_email):
+    """Generates and sends a 6-digit OTP via SMTP."""
     otp = str(random.randint(100000, 999999))
     msg = EmailMessage()
     msg.set_content(f"AXOM NEURAL ACCESS KEY: {otp}\nINITIALIZING SECURE LINK...")
@@ -74,18 +77,22 @@ def send_neural_key(receiver_email):
         return None
 
 def mark_page_visual(image, marks_data):
+    """Draws large human-like ticks and crosses on the page image."""
     draw = ImageDraw.Draw(image)
-    mark_font_size = 60 
+    
+    # Large, clear font size for Ibrahim to see easily
+    mark_font_size = 65 
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", mark_font_size)
     except:
         font = ImageFont.load_default()
     
-    ink_color = (239, 68, 68) 
+    ink_color = (239, 68, 68) # Professional Examiner Red
     page_ticks = 0
     annotations_list = []
     
     for mark in marks_data:
+        # Slight jitter to look human
         x = mark.get('x', 50) + random.randint(-5, 5)
         y = mark.get('y', 50) + random.randint(-5, 5)
         
@@ -95,12 +102,13 @@ def mark_page_visual(image, marks_data):
         if mark['type'] == 'tick':
             page_ticks += 1
         
+        # Collect data for Sticky Notes (Annotations)
         if 'comment' in mark:
             annotations_list.append({'x': x, 'y': y, 'text': mark['comment']})
             
     return image, page_ticks, annotations_list
 
-# --- 3. SESSION LOGIC ---
+# --- 3. SESSION & AUTH LOGIC ---
 if "auth_step" not in st.session_state:
     st.session_state.auth_step = "identify"
     st.session_state.logged_in = False
@@ -123,7 +131,7 @@ if not st.session_state.logged_in:
                         st.session_state.auth_step = "verify"
                         st.rerun()
                     else:
-                        st.error("COMMS ERROR")
+                        st.error("COMMS ERROR: CHECK SECRETS")
 
         elif st.session_state.auth_step == "verify":
             st.title("VERIFY LINK")
@@ -135,17 +143,18 @@ if not st.session_state.logged_in:
                     st.session_state.user_email = st.session_state.temp_email
                     st.rerun()
                 else:
-                    st.error("ACCESS DENIED")
+                    st.error("ACCESS DENIED: INVALID KEY")
         st.markdown('</div>', unsafe_allow_html=True)
 
 else:
-    # --- SIDEBAR: EXAM DETAILS ---
+    # --- SIDEBAR: EXAM METADATA ---
     st.sidebar.title("AXOM STATUS")
     st.sidebar.write(f"ACTIVE: {st.session_state.user_email}")
     
     st.sidebar.markdown("---")
-    exam_board = st.sidebar.text_input("ENTER EXAM BOARD", placeholder="e.g. Cambridge / IGCSE")
-    subject_info = st.sidebar.text_input("ENTER EXAM CODE / SUBJECT", placeholder="e.g. 0580 Mathematics")
+    st.sidebar.subheader("EXAM CONFIGURATION")
+    exam_board = st.sidebar.text_input("EXAM BOARD", placeholder="e.g. Cambridge / IGCSE")
+    subject_info = st.sidebar.text_input("SUBJECT / CODE", placeholder="e.g. 0620 Chemistry")
     st.sidebar.markdown("---")
     
     if st.sidebar.button("TERMINATE SESSION"):
@@ -157,11 +166,11 @@ else:
 
     with tab1:
         st.header("DOCUMENT SCAN")
-        uploaded_file = st.file_uploader("UPLOAD SCRIPT", type=['pdf'])
+        uploaded_file = st.file_uploader("UPLOAD SCRIPT (PDF)", type=['pdf'])
         
         if uploaded_file:
             if st.button("RUN FULL NEURAL ANALYSIS"):
-                with st.spinner("EXAMINING ENTIRE DOCUMENT..."):
+                with st.spinner("SYNCHRONIZING WITH EXAM STANDARDS..."):
                     file_bytes = uploaded_file.read()
                     total_score = 0
                     total_elements = 0
@@ -170,28 +179,32 @@ else:
                         pages = convert_from_bytes(file_bytes)
                         pdf = FPDF()
                         
-                        # --- ENHANCED COVER PAGE ---
+                        # --- CUSTOM COVER PAGE ---
                         pdf.add_page()
-                        pdf.set_fill_color(0, 18, 46)
+                        pdf.set_fill_color(0, 18, 46) # Dark Blue
                         pdf.rect(0, 0, 210, 297, 'F')
-                        pdf.set_text_color(0, 212, 255)
+                        pdf.set_text_color(0, 212, 255) # Cyan
                         
                         pdf.set_font("Arial", 'B', 32)
                         pdf.cell(0, 60, "CHECKED BY AXOM", ln=True, align='C')
                         
-                        pdf.set_font("Arial", 'B', 16)
+                        pdf.set_font("Arial", 'B', 18)
                         if exam_board:
-                            pdf.cell(0, 10, f"BOARD: {exam_board.upper()}", ln=True, align='C')
+                            pdf.cell(0, 12, f"EXAM BOARD: {exam_board.upper()}", ln=True, align='C')
                         if subject_info:
-                            pdf.cell(0, 10, f"SUBJECT: {subject_info.upper()}", ln=True, align='C')
+                            pdf.cell(0, 12, f"SUBJECT: {subject_info.upper()}", ln=True, align='C')
                             
-                        pdf.ln(20)
+                        pdf.ln(30)
                         pdf.set_font("Arial", 'I', 12)
-                        pdf.cell(0, 10, f"DATE: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align='C')
+                        pdf.cell(0, 10, f"PROCESSED ON: {datetime.now().strftime('%d %B %Y | %H:%M')}", ln=True, align='C')
 
+                        # --- PAGE-BY-PAGE ANALYSIS ---
                         for i, page_img in enumerate(pages):
-                            # Incorporate Subject Info into the AI prompt for better marking accuracy
-                            prompt = f"Mark page {i+1} of this {subject_info} {exam_board} paper as a strict examiner. Return ONLY a JSON list: [{{'type': 'tick'|'cross', 'x': int, 'y': int, 'comment': str}}]"
+                            # AI Prompt tailored with specific subject info
+                            prompt = (f"Act as a strict {exam_board} examiner for {subject_info}. "
+                                      f"Mark page {i+1} accurately. Correct errors with helpful notes. "
+                                      "Return ONLY a JSON list: [{'type': 'tick'|'cross', 'x': int, 'y': int, 'comment': str}]")
+                            
                             response = client.models.generate_content(model=MODEL_ID, contents=[prompt, page_img])
                             
                             try:
@@ -202,32 +215,45 @@ else:
                                 total_score += p_score
                                 total_elements += len(marks_data)
                                 
+                                # Add the marked page to the PDF
                                 pdf.add_page()
-                                t_name = f"tmp_{i}.png"
-                                marked_img.save(t_name)
-                                pdf.image(t_name, x=0, y=0, w=210, h=297)
-                                os.remove(t_name)
+                                temp_path = f"axom_p{i}.png"
+                                marked_img.save(temp_path)
+                                pdf.image(temp_path, x=0, y=0, w=210, h=297)
+                                os.remove(temp_path)
                                 
+                                # Inject Sticky Note Annotations
                                 for note in page_notes:
+                                    # Scale Pillow pixels to A4 mm coordinates
                                     scaled_x = (note['x'] / marked_img.width) * 210
                                     scaled_y = (note['y'] / marked_img.height) * 297
                                     pdf.text_annotation(x=scaled_x, y=scaled_y, text=note['text'])
-                            except:
+                            except Exception as e:
+                                # Fallback for unparseable AI response
                                 pdf.add_page()
+                                t_path = f"fail_{i}.png"
+                                page_img.save(t_path)
+                                pdf.image(t_path, x=0, y=0, w=210, h=297)
+                                os.remove(t_path)
 
+                        # --- FINAL EXPORT ---
                         final_pdf = bytes(pdf.output())
                         
-                        # CUSTOM FILENAME
-                        original_name = uploaded_file.name.replace(".pdf", "")
-                        download_name = f"{original_name}_checked by AXOM.pdf"
+                        # Filename: [original]_checked by AXOM.pdf
+                        orig_filename = uploaded_file.name.rsplit('.', 1)[0]
+                        final_filename = f"{orig_filename}_checked by AXOM.pdf"
 
-                        st.success(f"ANALYSIS COMPLETE: {total_score}/{total_elements} MARKS FOUND")
+                        st.success(f"NEURAL ANALYSIS COMPLETE | SCORE: {total_score}/{total_elements}")
                         st.download_button(
-                            label="📥 DOWNLOAD CHECKED SCRIPT", 
+                            label="📥 DOWNLOAD ENHANCED SCRIPT", 
                             data=final_pdf, 
-                            file_name=download_name, 
+                            file_name=final_filename, 
                             mime="application/pdf"
                         )
 
                     except Exception as e:
-                        st.error(f"SYSTEM ERROR: {str(e)}")
+                        st.error(f"NEURAL INTERRUPT: {str(e)}")
+
+    with tab2:
+        st.header("ARCHIVED SESSIONS")
+        st.info("DATA PERSISTENCE ENGINE INITIALIZING... HISTORY WILL APPEAR HERE IN NEXT VERSION.")
