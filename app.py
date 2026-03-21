@@ -21,6 +21,7 @@ st.markdown("""
     <style>
     .stApp { background: radial-gradient(circle, #00122e 0%, #00050d 100%); color: #00d4ff; font-family: 'Courier New', monospace; }
     .future-frame { border: 2px solid #00d4ff; border-radius: 10px; padding: 30px; background: rgba(0, 20, 46, 0.9); box-shadow: 0 0 20px rgba(0, 212, 255, 0.2); }
+    .report-box { padding: 20px; border-left: 5px solid #00d4ff; background: rgba(0, 212, 255, 0.05); margin: 10px 0; }
     .stButton>button { width: 100%; background: #00d4ff; color: #000; border: none; border-radius: 5px; height: 50px; font-weight: bold; text-transform: uppercase; }
     .stButton>button:hover { background: #008fb3 !important; color: #fff !important; box-shadow: 0 0 15px #00d4ff; }
     .stTextInput>div>div>input { background: rgba(0, 212, 255, 0.1) !important; color: #00d4ff !important; border: 1px solid #00d4ff !important; text-align: center; }
@@ -30,14 +31,14 @@ st.markdown("""
 
 # --- 2. BACKEND UTILITIES ---
 client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
-MODEL_ID = "gemini-2.5-flash" 
+MODEL_ID = "gemini-3-flash" # Latest Production Model
 HISTORY_FILE = "axom_history.csv"
 
 def get_grade(perc):
     if perc >= 80: return "A*"
-    if perc >= 70: return "A"
-    if perc >= 60: return "B"
-    if perc >= 50: return "C"
+    elif perc >= 70: return "A"
+    elif perc >= 60: return "B"
+    elif perc >= 50: return "C"
     return "D/E"
 
 def robust_json_parser(text):
@@ -52,41 +53,29 @@ def mark_visuals(image, marks_data):
     f_size = int(image.height * 0.035) 
     try: font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", f_size)
     except: font = ImageFont.load_default()
-    ticks = 0
-    notes = []
+    ticks, notes = 0, []
     for m in marks_data:
         x, y = int((m.get('x', 50)/1000)*image.width), int((m.get('y', 50)/1000)*image.height)
         char = "✓" if m['type'] == 'tick' else "✕"
         draw.text((x, y), char, fill=(239, 68, 68), font=font)
         if m['type'] == 'tick': ticks += 1
-        if 'comment' in m: notes.append({'x': x, 'y': y, 'txt': m['comment']})
+        if 'comment' in m: notes.append(m['comment'])
     return image, ticks, notes
 
-# --- 3. SESSION AUTH ---
+# --- 3. MAIN INTERFACE ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-    st.session_state.step = "login"
 
 if not st.session_state.logged_in:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
         st.markdown('<div class="future-frame">', unsafe_allow_html=True)
-        if st.session_state.step == "login":
-            st.title("AXOM ACCESS")
-            u_email = st.text_input("ENTER EMAIL")
-            if st.button("REQUEST NEURAL KEY"):
-                st.session_state.otp, st.session_state.u_email, st.session_state.step = "123456", u_email, "verify"
-                st.rerun()
-        else:
-            st.title("VERIFY KEY")
-            u_otp = st.text_input("6-DIGIT KEY", type="password")
-            if st.button("UNLOCK INTERFACE"):
-                if u_otp == st.session_state.otp:
-                    st.session_state.logged_in = True
-                    st.rerun()
+        st.title("AXOM ACCESS")
+        u_email = st.text_input("ENTER EMAIL")
+        if st.button("UNLOCK INTERFACE"):
+            st.session_state.logged_in, st.session_state.u_email = True, u_email
+            st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-
-# --- 4. MAIN INTERFACE ---
 else:
     t1, t2 = st.tabs(["NEURAL SCANNER", "DATA ARCHIVE"])
 
@@ -97,65 +86,54 @@ else:
         
         c1, c2 = st.columns(2)
         with c1: board = st.text_input("EXAM BOARD", "Cambridge")
-        with c2: code = st.text_input("SUBJECT CODE", "0580 Mathematics")
+        with c2: code = st.text_input("SUBJECT CODE", "IGCSE Physics")
 
         if up_script and st.button("INITIALIZE ANALYSIS"):
-            with st.spinner("GEMINI 2.5 FLASH ANALYZING..."):
+            with st.spinner("AXOM NEURAL ENGINE EVALUATING..."):
                 try:
                     script_imgs = convert_from_bytes(up_script.read())
                     pdf = FPDF()
+                    all_ticks, total_items, all_comments = 0, 0, []
                     
-                    # Cover
-                    pdf.add_page()
-                    pdf.set_fill_color(0, 18, 46); pdf.rect(0,0,210,297,'F')
-                    pdf.set_text_color(0, 212, 255); pdf.set_font("Arial",'B',30)
-                    pdf.cell(0, 80, "AXOM EVALUATION", ln=True, align='C')
-                    
-                    all_ticks, total_items = 0, 0
                     for i, img in enumerate(script_imgs):
-                        prompt = f"Mark page {i+1} as {board} {code} examiner. Output ONLY JSON: [{{'type':'tick'|'cross','x':int,'y':int,'comment':str}}]"
+                        prompt = f"Mark page {i+1} for {board} {code}. Output ONLY JSON: [{{'type':'tick'|'cross','x':int,'y':int,'comment':str}}]"
                         response = client.models.generate_content(model=MODEL_ID, contents=[prompt, img])
                         data = robust_json_parser(response.text)
+                        
                         marked_img, p_ticks, p_notes = mark_visuals(img, data)
                         all_ticks += p_ticks
                         total_items += len(data)
+                        all_comments.extend(p_notes)
                         
                         pdf.add_page()
                         tmp = f"p{i}.png"; marked_img.save(tmp)
                         pdf.image(tmp, 0, 0, 210, 297); os.remove(tmp)
-                        for n in p_notes:
-                            pdf.text_annotation(x=(n['x']/marked_img.width)*210, y=(n['y']/marked_img.height)*297, text=n['txt'])
 
                     perc = (all_ticks/total_items*100) if total_items > 0 else 0
                     grade = get_grade(perc)
                     
-                    # Secure History Save
-                    row = pd.DataFrame([{"Date": datetime.now().strftime("%Y-%m-%d"), "Email": st.session_state.u_email, "Board": board, "Subject": code, "Result": f"{all_ticks}/{total_items}", "Grade": grade}])
-                    row.to_csv(HISTORY_FILE, mode='a', header=not os.path.exists(HISTORY_FILE), index=False, quoting=csv.QUOTE_ALL)
+                    # Store data for report
+                    st.session_state.last_result = {"grade": grade, "score": f"{all_ticks}/{total_items}", "comments": all_comments}
                     
-                    # FIX: Handle bytearray properly
-                    pdf_output = pdf.output(dest='S')
-                    if isinstance(pdf_output, str):
-                        pdf_data = pdf_output.encode('latin-1')
-                    else:
-                        pdf_data = bytes(pdf_output)
-
-                    st.success(f"COMPLETE: {grade}")
-                    st.download_button("📥 DOWNLOAD MARKED PDF", data=pdf_data, file_name="axom_checked.pdf", mime="application/pdf")
+                    # Save History
+                    pd.DataFrame([{"Date": datetime.now().strftime("%Y-%m-%d"), "Email": st.session_state.u_email, "Board": board, "Subject": code, "Result": f"{all_ticks}/{total_items}", "Grade": grade}]).to_csv(HISTORY_FILE, mode='a', header=not os.path.exists(HISTORY_FILE), index=False, quoting=csv.QUOTE_ALL)
+                    
+                    st.success(f"ANALYSIS COMPLETE: {grade}")
+                    st.download_button("📥 DOWNLOAD MARKED PDF", data=bytes(pdf.output(dest='S')), file_name="axom_checked.pdf")
+                    
+                    # --- NEW REPORT SECTION ---
+                    st.markdown("---")
+                    if st.button("GENERATE NEURAL DIAGNOSTIC REPORT"):
+                        with st.spinner("AI ANALYZING WEAKNESSES..."):
+                            analysis_prompt = f"Based on these examiner comments from a {code} test: {all_comments}. Identify the top 2 strengths, top 2 weaknesses, and 3 specific topics to revise. Be concise."
+                            report_resp = client.models.generate_content(model=MODEL_ID, contents=[analysis_prompt])
+                            st.markdown(f'<div class="report-box"><h3>DIAGNOSTIC REPORT</h3>{report_resp.text}</div>', unsafe_allow_html=True)
+                            
                 except Exception as e: st.error(f"ENGINE ERROR: {e}")
 
     with t2:
         st.header("DATA ARCHIVE")
         if os.path.exists(HISTORY_FILE):
-            try:
-                df = pd.read_csv(HISTORY_FILE, quoting=csv.QUOTE_ALL)
-                user_df = df[df['Email'] == st.session_state.u_email]
-                if not user_df.empty:
-                    st.dataframe(user_df.drop(columns=['Email']), use_container_width=True)
-                else: st.info("No records found.")
-            except Exception:
-                st.error("DATABASE CORRUPTED")
-                if st.button("RESET DATABASE"):
-                    os.remove(HISTORY_FILE)
-                    st.rerun()
+            df = pd.read_csv(HISTORY_FILE, quoting=csv.QUOTE_ALL)
+            st.dataframe(df[df['Email'] == st.session_state.u_email].drop(columns=['Email']), use_container_width=True)
         else: st.info("Archive empty.")
