@@ -59,9 +59,34 @@ st.markdown("""
 # --- 2. BACKEND ENGINES ---
 client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 MODEL_ID = "gemini-2.5-flash"
+HISTORY_FILE = "axom_history.csv"
+
+def get_igcse_grade(percentage):
+    if percentage >= 80: return "A*"
+    if percentage >= 70: return "A"
+    if percentage >= 60: return "B"
+    if percentage >= 50: return "C"
+    return "D/E"
+
+def save_to_history(email, board, subject, score, total):
+    """Saves session data to a local CSV file for persistent history."""
+    perc = (score / total * 100) if total > 0 else 0
+    grade = get_igcse_grade(perc)
+    
+    new_data = {
+        "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "Email": email,
+        "Board": board if board else "N/A",
+        "Subject": subject if subject else "N/A",
+        "Result": f"{score}/{total}",
+        "Grade": grade
+    }
+    
+    df_new = pd.DataFrame([new_data])
+    file_exists = os.path.exists(HISTORY_FILE)
+    df_new.to_csv(HISTORY_FILE, mode='a', header=not file_exists, index=False)
 
 def send_neural_key(receiver_email):
-    """Generates and sends a 6-digit OTP via SMTP."""
     otp = str(random.randint(100000, 999999))
     msg = EmailMessage()
     msg.set_content(f"AXOM NEURAL ACCESS KEY: {otp}\nINITIALIZING SECURE LINK...")
@@ -77,32 +102,25 @@ def send_neural_key(receiver_email):
         return None
 
 def mark_page_visual(image, marks_data):
-    """Draws large human-like ticks and crosses on the page image."""
     draw = ImageDraw.Draw(image)
-    
-    # Large, clear font size for Ibrahim to see easily
     mark_font_size = 65 
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", mark_font_size)
     except:
         font = ImageFont.load_default()
     
-    ink_color = (239, 68, 68) # Professional Examiner Red
+    ink_color = (239, 68, 68) 
     page_ticks = 0
     annotations_list = []
     
     for mark in marks_data:
-        # Slight jitter to look human
         x = mark.get('x', 50) + random.randint(-5, 5)
         y = mark.get('y', 50) + random.randint(-5, 5)
-        
         icon = "✓" if mark['type'] == 'tick' else "✕"
         draw.text((x, y), icon, fill=ink_color, font=font)
         
         if mark['type'] == 'tick':
             page_ticks += 1
-        
-        # Collect data for Sticky Notes (Annotations)
         if 'comment' in mark:
             annotations_list.append({'x': x, 'y': y, 'text': mark['comment']})
             
@@ -131,7 +149,7 @@ if not st.session_state.logged_in:
                         st.session_state.auth_step = "verify"
                         st.rerun()
                     else:
-                        st.error("COMMS ERROR: CHECK SECRETS")
+                        st.error("COMMS ERROR: CHECK CONFIG")
 
         elif st.session_state.auth_step == "verify":
             st.title("VERIFY LINK")
@@ -143,19 +161,16 @@ if not st.session_state.logged_in:
                     st.session_state.user_email = st.session_state.temp_email
                     st.rerun()
                 else:
-                    st.error("ACCESS DENIED: INVALID KEY")
+                    st.error("ACCESS DENIED")
         st.markdown('</div>', unsafe_allow_html=True)
 
 else:
     # --- SIDEBAR: EXAM METADATA ---
     st.sidebar.title("AXOM STATUS")
     st.sidebar.write(f"ACTIVE: {st.session_state.user_email}")
-    
     st.sidebar.markdown("---")
-    st.sidebar.subheader("EXAM CONFIGURATION")
-    exam_board = st.sidebar.text_input("EXAM BOARD", placeholder="e.g. Cambridge / IGCSE")
-    subject_info = st.sidebar.text_input("SUBJECT / CODE", placeholder="e.g. 0620 Chemistry")
-    st.sidebar.markdown("---")
+    exam_board = st.sidebar.text_input("EXAM BOARD", placeholder="e.g. Cambridge / Edexcel")
+    subject_info = st.sidebar.text_input("SUBJECT / CODE", placeholder="e.g. 0580 Mathematics")
     
     if st.sidebar.button("TERMINATE SESSION"):
         st.session_state.logged_in = False
@@ -179,31 +194,23 @@ else:
                         pages = convert_from_bytes(file_bytes)
                         pdf = FPDF()
                         
-                        # --- CUSTOM COVER PAGE ---
+                        # --- COVER PAGE ---
                         pdf.add_page()
-                        pdf.set_fill_color(0, 18, 46) # Dark Blue
+                        pdf.set_fill_color(0, 18, 46)
                         pdf.rect(0, 0, 210, 297, 'F')
-                        pdf.set_text_color(0, 212, 255) # Cyan
-                        
+                        pdf.set_text_color(0, 212, 255)
                         pdf.set_font("Arial", 'B', 32)
                         pdf.cell(0, 60, "CHECKED BY AXOM", ln=True, align='C')
                         
                         pdf.set_font("Arial", 'B', 18)
-                        if exam_board:
-                            pdf.cell(0, 12, f"EXAM BOARD: {exam_board.upper()}", ln=True, align='C')
-                        if subject_info:
-                            pdf.cell(0, 12, f"SUBJECT: {subject_info.upper()}", ln=True, align='C')
-                            
-                        pdf.ln(30)
-                        pdf.set_font("Arial", 'I', 12)
-                        pdf.cell(0, 10, f"PROCESSED ON: {datetime.now().strftime('%d %B %Y | %H:%M')}", ln=True, align='C')
+                        pdf.cell(0, 12, f"BOARD: {exam_board.upper() if exam_board else 'UNSPECIFIED'}", ln=True, align='C')
+                        pdf.cell(0, 12, f"SUBJECT: {subject_info.upper() if subject_info else 'GENERAL'}", ln=True, align='C')
 
-                        # --- PAGE-BY-PAGE ANALYSIS ---
+                        # --- PAGE ANALYSIS ---
                         for i, page_img in enumerate(pages):
-                            # AI Prompt tailored with specific subject info
                             prompt = (f"Act as a strict {exam_board} examiner for {subject_info}. "
-                                      f"Mark page {i+1} accurately. Correct errors with helpful notes. "
-                                      "Return ONLY a JSON list: [{'type': 'tick'|'cross', 'x': int, 'y': int, 'comment': str}]")
+                                      f"Mark page {i+1} accurately. Return ONLY a JSON list: "
+                                      "[{'type': 'tick'|'cross', 'x': int, 'y': int, 'comment': str}]")
                             
                             response = client.models.generate_content(model=MODEL_ID, contents=[prompt, page_img])
                             
@@ -215,45 +222,47 @@ else:
                                 total_score += p_score
                                 total_elements += len(marks_data)
                                 
-                                # Add the marked page to the PDF
                                 pdf.add_page()
                                 temp_path = f"axom_p{i}.png"
                                 marked_img.save(temp_path)
                                 pdf.image(temp_path, x=0, y=0, w=210, h=297)
                                 os.remove(temp_path)
                                 
-                                # Inject Sticky Note Annotations
                                 for note in page_notes:
-                                    # Scale Pillow pixels to A4 mm coordinates
                                     scaled_x = (note['x'] / marked_img.width) * 210
                                     scaled_y = (note['y'] / marked_img.height) * 297
                                     pdf.text_annotation(x=scaled_x, y=scaled_y, text=note['text'])
-                            except Exception as e:
-                                # Fallback for unparseable AI response
+                            except:
                                 pdf.add_page()
-                                t_path = f"fail_{i}.png"
-                                page_img.save(t_path)
-                                pdf.image(t_path, x=0, y=0, w=210, h=297)
-                                os.remove(t_path)
 
-                        # --- FINAL EXPORT ---
                         final_pdf = bytes(pdf.output())
                         
-                        # Filename: [original]_checked by AXOM.pdf
+                        # Save session to the stable History CSV
+                        save_to_history(st.session_state.user_email, exam_board, subject_info, total_score, total_elements)
+                        
                         orig_filename = uploaded_file.name.rsplit('.', 1)[0]
                         final_filename = f"{orig_filename}_checked by AXOM.pdf"
 
-                        st.success(f"NEURAL ANALYSIS COMPLETE | SCORE: {total_score}/{total_elements}")
-                        st.download_button(
-                            label="📥 DOWNLOAD ENHANCED SCRIPT", 
-                            data=final_pdf, 
-                            file_name=final_filename, 
-                            mime="application/pdf"
-                        )
+                        st.success(f"ANALYSIS COMPLETE | SAVED TO ARCHIVE")
+                        st.download_button(label="📥 DOWNLOAD CHECKED SCRIPT", data=final_pdf, file_name=final_filename, mime="application/pdf")
 
                     except Exception as e:
-                        st.error(f"NEURAL INTERRUPT: {str(e)}")
+                        st.error(f"NEURAL ERROR: {str(e)}")
 
     with tab2:
         st.header("ARCHIVED SESSIONS")
-        st.info("DATA PERSISTENCE ENGINE INITIALIZING... HISTORY WILL APPEAR HERE IN NEXT VERSION.")
+        if os.path.exists(HISTORY_FILE):
+            history_df = pd.read_csv(HISTORY_FILE)
+            user_view = history_df[history_df['Email'] == st.session_state.user_email]
+            
+            if not user_view.empty:
+                # Format the table for the AXOM theme
+                st.dataframe(user_view.drop(columns=['Email']), use_container_width=True)
+                if st.button("CLEAR MY HISTORY"):
+                    history_df = history_df[history_df['Email'] != st.session_state.user_email]
+                    history_df.to_csv(HISTORY_FILE, index=False)
+                    st.rerun()
+            else:
+                st.info("No past sessions found for your profile.")
+        else:
+            st.warning("Database initialized. Complete your first scan to see history here.")
