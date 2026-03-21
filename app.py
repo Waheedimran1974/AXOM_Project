@@ -24,11 +24,13 @@ st.markdown("""
     .stButton>button:hover { background: #00d4ff !important; color: #000 !important; box-shadow: 0 0 15px #00d4ff; }
     .stTextInput>div>div>input { background: rgba(0, 212, 255, 0.1) !important; color: #00d4ff !important; border: 1px solid #00d4ff !important; text-align: center; }
     h1, h2, h3 { color: #00d4ff !important; text-shadow: 0 0 8px #00d4ff; }
+    .stTabs [data-baseweb="tab-list"] { background-color: transparent; }
+    .stTabs [data-baseweb="tab"] { color: #00d4ff; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 2. BACKEND UTILITIES ---
-# Ensure you have "GENAI_API_KEY", "SENDER_EMAIL", and "APP_PASSWORD" in your Secrets!
+# Requirements: pip install streamlit google-genai pandas pillow pdf2image fpdf
 client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 MODEL_ID = "gemini-2.0-flash"
 HISTORY_FILE = "axom_history.csv"
@@ -57,8 +59,8 @@ def send_otp(email):
         return None
 
 def robust_json_parser(text):
-    """Extracts JSON from AI text even if it includes markdown or chatter."""
     try:
+        # Regex to find anything between [ ] brackets
         match = re.search(r'\[.*\]', text, re.DOTALL)
         if match:
             return json.loads(match.group(0))
@@ -67,10 +69,8 @@ def robust_json_parser(text):
         return []
 
 def mark_visuals(image, marks_data):
-    """Draws marks and prepares sticky note coordinates."""
     draw = ImageDraw.Draw(image)
-    # Scalable font size based on image height
-    f_size = int(image.height * 0.04) 
+    f_size = int(image.height * 0.035) 
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", f_size)
     except:
@@ -79,13 +79,10 @@ def mark_visuals(image, marks_data):
     ticks = 0
     notes = []
     for m in marks_data:
-        # AI provides 0-1000 coordinates for consistency
         x = int((m.get('x', 50) / 1000) * image.width)
         y = int((m.get('y', 50) / 1000) * image.height)
-        
         char = "✓" if m['type'] == 'tick' else "✕"
         draw.text((x, y), char, fill=(239, 68, 68), font=font)
-        
         if m['type'] == 'tick': ticks += 1
         if 'comment' in m:
             notes.append({'x': x, 'y': y, 'txt': m['comment']})
@@ -102,8 +99,8 @@ if not st.session_state.logged_in:
         st.markdown('<div class="future-frame">', unsafe_allow_html=True)
         if st.session_state.step == "login":
             st.title("AXOM ACCESS")
-            u_email = st.text_input("EMAIL")
-            if st.button("GET KEY"):
+            u_email = st.text_input("ENTER EMAIL")
+            if st.button("REQUEST NEURAL KEY"):
                 key = send_otp(u_email)
                 if key:
                     st.session_state.otp, st.session_state.u_email, st.session_state.step = key, u_email, "verify"
@@ -111,10 +108,12 @@ if not st.session_state.logged_in:
         else:
             st.title("VERIFY KEY")
             u_otp = st.text_input("6-DIGIT KEY", type="password")
-            if st.button("UNLOCK"):
+            if st.button("UNLOCK INTERFACE"):
                 if u_otp == st.session_state.otp:
                     st.session_state.logged_in = True
                     st.rerun()
+                else:
+                    st.error("INVALID KEY")
         st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 4. MAIN INTERFACE ---
@@ -123,72 +122,95 @@ else:
 
     with t1:
         st.header("NEURAL SCANNER")
-        up_script = st.file_uploader("UPLOAD SCRIPT", type=['pdf'])
-        up_ms = st.file_uploader("UPLOAD MARK SCHEME (OPTIONAL)", type=['pdf'])
+        up_script = st.file_uploader("1. UPLOAD STUDENT SCRIPT (PDF)", type=['pdf'])
+        up_ms = st.file_uploader("2. UPLOAD MARK SCHEME (OPTIONAL PDF)", type=['pdf'])
         
         c1, c2 = st.columns(2)
         with c1: board = st.text_input("EXAM BOARD", "Cambridge")
-        with c2: code = st.text_input("SUBJECT CODE", "IGCSE Science")
+        with c2: code = st.text_input("SUBJECT CODE", "0580 Mathematics")
 
         if up_script and st.button("INITIALIZE ANALYSIS"):
-            with st.spinner("AXOM IS THINKING..."):
+            with st.spinner("AXOM NEURAL ENGINE PROCESSING..."):
                 try:
-                    script_imgs = convert_from_bytes(up_script.read())
-                    ms_text = ""
+                    script_bytes = up_script.read()
+                    script_imgs = convert_from_bytes(script_bytes)
+                    
+                    # Prepare Mark Scheme if provided
+                    ms_payload = []
                     if up_ms:
-                        # Simple MS integration: In a full build, you'd extract text from MS PDF
-                        ms_text = "Use the provided Mark Scheme logic."
-
+                        ms_imgs = convert_from_bytes(up_ms.read())
+                        ms_payload = ["REFERENCE MARK SCHEME ATTACHED. FOLLOW THIS STRICTLY:"] + ms_imgs
+                    
                     pdf = FPDF()
-                    # Cover
+                    # Custom Cover Page
                     pdf.add_page()
                     pdf.set_fill_color(0, 18, 46); pdf.rect(0,0,210,297,'F')
                     pdf.set_text_color(0, 212, 255); pdf.set_font("Arial",'B',30)
-                    pdf.cell(0, 100, "AXOM EVALUATION", ln=True, align='C')
+                    pdf.cell(0, 80, "AXOM EVALUATION REPORT", ln=True, align='C')
+                    pdf.set_font("Arial",'',14)
+                    pdf.cell(0, 10, f"Board: {board} | Subject: {code}", ln=True, align='C')
                     
-                    all_ticks, all_possible = 0, 0
+                    all_ticks, total_items = 0, 0
                     
                     for i, img in enumerate(script_imgs):
-                        prompt = (f"Strict {board} examiner mode. Subject: {code}. {ms_text} "
-                                  f"Mark page {i+1}. Give Ticks for correct, Crosses for wrong. "
-                                  "Coordinates (x,y) must be 0-1000. "
-                                  "Output ONLY JSON: [{'type':'tick'|'cross','x':int,'y':int,'comment':str}]")
+                        # Combine prompt, script page, and mark scheme context
+                        prompt = (f"Act as a strict {board} examiner for {code}. Mark page {i+1}. "
+                                  "Award ticks for correct answers and crosses for incorrect ones based on MS. "
+                                  "Coordinates (x,y) are 0-1000 relative to page. "
+                                  "Output ONLY JSON list: [{'type':'tick'|'cross','x':int,'y':int,'comment':str}]")
                         
-                        response = client.models.generate_content(model=MODEL_ID, contents=[prompt, img])
+                        contents = [prompt, img] + ms_payload
+                        response = client.models.generate_content(model=MODEL_ID, contents=contents)
+                        
                         data = robust_json_parser(response.text)
-                        
                         marked_img, p_ticks, p_notes = mark_visuals(img, data)
+                        
                         all_ticks += p_ticks
-                        all_possible += len(data)
+                        total_items += len(data)
                         
-                        # Add Page to PDF
+                        # Save marked page to PDF
                         pdf.add_page()
-                        tmp = f"p{i}.png"; marked_img.save(tmp)
-                        pdf.image(tmp, 0, 0, 210, 297); os.remove(tmp)
+                        tmp_name = f"temp_page_{i}.png"
+                        marked_img.save(tmp_name)
+                        pdf.image(tmp_name, 0, 0, 210, 297)
+                        os.remove(tmp_name)
                         
-                        # Add Sticky Notes (Annotations)
                         for n in p_notes:
                             pdf.text_annotation(x=(n['x']/marked_img.width)*210, y=(n['y']/marked_img.height)*297, text=n['txt'])
 
-                    # Finalize PDF & History
-                    final_pdf = bytes(pdf.output())
-                    perc = (all_ticks/all_possible*100) if all_possible > 0 else 0
+                    final_pdf_bytes = pdf.output(dest='S').encode('latin-1')
+                    perc = (all_ticks/total_items*100) if total_items > 0 else 0
                     grade = get_grade(perc)
                     
-                    # Save to History
-                    row = pd.DataFrame([{"Date": datetime.now().strftime("%Y-%m-%d"), "Email": st.session_state.u_email, "Board": board, "Subject": code, "Result": f"{all_ticks}/{all_possible}", "Grade": grade}])
-                    row.to_csv(HISTORY_FILE, mode='a', header=not os.path.exists(HISTORY_FILE), index=False)
+                    # Update History
+                    new_row = pd.DataFrame([{
+                        "Date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "Email": st.session_state.u_email,
+                        "Board": board,
+                        "Subject": code,
+                        "Result": f"{all_ticks}/{total_items}",
+                        "Grade": grade
+                    }])
+                    new_row.to_csv(HISTORY_FILE, mode='a', header=not os.path.exists(HISTORY_FILE), index=False)
                     
-                    st.success(f"ANALYSIS COMPLETE: {grade}")
-                    st.download_button(f"📥 DOWNLOAD {up_script.name.replace('.pdf','')}_checked by AXOM.pdf", data=final_pdf, file_name=f"{up_script.name.replace('.pdf','')}_checked by AXOM.pdf")
+                    st.success(f"ANALYSIS COMPLETE: {all_ticks}/{total_items} | GRADE: {grade}")
+                    st.download_button(
+                        label=f"📥 DOWNLOAD CHECKED {up_script.name}",
+                        data=final_pdf_bytes,
+                        file_name=f"{up_script.name.replace('.pdf','')}_AXOM_CHECKED.pdf",
+                        mime="application/pdf"
+                    )
                 except Exception as e:
-                    st.error(f"CRITICAL ERROR: {e}")
+                    st.error(f"CRITICAL SYSTEM ERROR: {e}")
 
     with t2:
         st.header("DATA ARCHIVE")
         if os.path.exists(HISTORY_FILE):
             df = pd.read_csv(HISTORY_FILE)
             user_df = df[df['Email'] == st.session_state.u_email]
-            st.table(user_df.drop(columns=['Email']))
+            if not user_df.empty:
+                st.dataframe(user_df.drop(columns=['Email']), use_container_width=True)
+            else:
+                st.info("No past sessions found for this account.")
         else:
-            st.info("Archive empty. Complete a scan to begin.")
+            st.info("Archive is currently empty.")
