@@ -25,14 +25,12 @@ st.markdown("""
     .stButton>button:hover { background: #008fb3 !important; color: #fff !important; box-shadow: 0 0 15px #00d4ff; }
     .stTextInput>div>div>input { background: rgba(0, 212, 255, 0.1) !important; color: #00d4ff !important; border: 1px solid #00d4ff !important; text-align: center; }
     h1, h2, h3 { color: #00d4ff !important; text-shadow: 0 0 8px #00d4ff; }
-    .stTabs [data-baseweb="tab-list"] { background-color: transparent; }
-    .stTabs [data-baseweb="tab"] { color: #00d4ff; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 2. BACKEND UTILITIES ---
 client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
-MODEL_ID = "gemini-2.5-flash"  # UPGRADED ENGINE
+MODEL_ID = "gemini-2.5-flash" 
 HISTORY_FILE = "axom_history.csv"
 
 def get_grade(perc):
@@ -102,10 +100,12 @@ else:
         with c2: code = st.text_input("SUBJECT CODE", "0580 Mathematics")
 
         if up_script and st.button("INITIALIZE ANALYSIS"):
-            with st.spinner("GEMINI 2.5 FLASH ANALYZING SCRIPT..."):
+            with st.spinner("GEMINI 2.5 FLASH ANALYZING..."):
                 try:
                     script_imgs = convert_from_bytes(up_script.read())
                     pdf = FPDF()
+                    
+                    # Cover
                     pdf.add_page()
                     pdf.set_fill_color(0, 18, 46); pdf.rect(0,0,210,297,'F')
                     pdf.set_text_color(0, 212, 255); pdf.set_font("Arial",'B',30)
@@ -113,10 +113,7 @@ else:
                     
                     all_ticks, total_items = 0, 0
                     for i, img in enumerate(script_imgs):
-                        prompt = (f"Act as a strict {board} examiner. Mark page {i+1} using {code} standards. "
-                                  "Compare student work to the Mark Scheme if provided. Output ONLY JSON: "
-                                  "[{'type':'tick'|'cross','x':int,'y':int,'comment':str}]")
-                        
+                        prompt = f"Mark page {i+1} as {board} {code} examiner. Output ONLY JSON: [{{'type':'tick'|'cross','x':int,'y':int,'comment':str}}]"
                         response = client.models.generate_content(model=MODEL_ID, contents=[prompt, img])
                         data = robust_json_parser(response.text)
                         marked_img, p_ticks, p_notes = mark_visuals(img, data)
@@ -132,12 +129,19 @@ else:
                     perc = (all_ticks/total_items*100) if total_items > 0 else 0
                     grade = get_grade(perc)
                     
-                    # SAVE TO CSV WITH FULL QUOTING (CORRUPTION PROTECTION)
+                    # Secure History Save
                     row = pd.DataFrame([{"Date": datetime.now().strftime("%Y-%m-%d"), "Email": st.session_state.u_email, "Board": board, "Subject": code, "Result": f"{all_ticks}/{total_items}", "Grade": grade}])
                     row.to_csv(HISTORY_FILE, mode='a', header=not os.path.exists(HISTORY_FILE), index=False, quoting=csv.QUOTE_ALL)
                     
+                    # FIX: Handle bytearray properly
+                    pdf_output = pdf.output(dest='S')
+                    if isinstance(pdf_output, str):
+                        pdf_data = pdf_output.encode('latin-1')
+                    else:
+                        pdf_data = bytes(pdf_output)
+
                     st.success(f"COMPLETE: {grade}")
-                    st.download_button("📥 DOWNLOAD MARKED PDF", data=pdf.output(dest='S').encode('latin-1'), file_name="axom_checked.pdf")
+                    st.download_button("📥 DOWNLOAD MARKED PDF", data=pdf_data, file_name="axom_checked.pdf", mime="application/pdf")
                 except Exception as e: st.error(f"ENGINE ERROR: {e}")
 
     with t2:
@@ -148,14 +152,10 @@ else:
                 user_df = df[df['Email'] == st.session_state.u_email]
                 if not user_df.empty:
                     st.dataframe(user_df.drop(columns=['Email']), use_container_width=True)
-                    if st.button("RESET MY HISTORY (FIX CORRUPTION)"):
-                        df = df[df['Email'] != st.session_state.u_email]
-                        df.to_csv(HISTORY_FILE, index=False, quoting=csv.QUOTE_ALL)
-                        st.rerun()
                 else: st.info("No records found.")
             except Exception:
                 st.error("DATABASE CORRUPTED")
-                if st.button("DELETE AND RESET HISTORY FILE"):
+                if st.button("RESET DATABASE"):
                     os.remove(HISTORY_FILE)
                     st.rerun()
         else: st.info("Archive empty.")
