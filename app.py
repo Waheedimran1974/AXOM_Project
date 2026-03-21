@@ -28,7 +28,7 @@ st.markdown("""
 
 # --- 2. BACKEND UTILITIES ---
 client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
-MODEL_ID = "gemini-3-flash" 
+MODEL_ID = "gemini-2.5-flash" 
 HISTORY_FILE = "axom_history.csv"
 
 def get_grade(perc):
@@ -64,4 +64,101 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    _, col2, _ = st.columns([1, 2, 1
+    _, col2, _ = st.columns([1, 2, 1])
+    with col2:
+        st.markdown('<div class="future-frame">', unsafe_allow_html=True)
+        st.title("AXOM ACCESS")
+        u_email = st.text_input("ENTER EMAIL ID")
+        u_pass = st.text_input("ENTER ACCESS KEY", type="password")
+        if st.button("INITIALIZE SESSION"):
+            if u_email and u_pass:
+                st.session_state.logged_in = True
+                st.session_state.u_email = u_email
+                st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# --- 4. MAIN INTERFACE ---
+else:
+    t1, t2 = st.tabs(["NEURAL SCANNER", "DATA ARCHIVE"])
+
+    with t1:
+        st.header("NEURAL SCANNER")
+        up_script = st.file_uploader("1. UPLOAD STUDENT SCRIPT (PDF)", type=['pdf'])
+        up_ms = st.file_uploader("2. UPLOAD MARK SCHEME (OPTIONAL)", type=['pdf'])
+        
+        c1, col_b = st.columns(2)
+        with c1: board = st.text_input("EXAM BOARD", "Cambridge")
+        with col_b: code = st.text_input("SUBJECT CODE", "IGCSE Exam")
+
+        if up_script and st.button("RUN FULL NEURAL EVALUATION"):
+            with st.spinner("AXOM ANALYZING SCRIPT..."):
+                try:
+                    script_imgs = convert_from_bytes(up_script.read())
+                    pdf = FPDF()
+                    all_ticks, total_items, all_comments = 0, 0, []
+                    
+                    for i, img in enumerate(script_imgs):
+                        prompt = f"Strict {board} examiner mode for {code}. Output ONLY JSON: [{{'type':'tick'|'cross','x':int,'y':int,'comment':str}}]"
+                        response = client.models.generate_content(model=MODEL_ID, contents=[prompt, img])
+                        data = robust_json_parser(response.text)
+                        
+                        marked_img, p_ticks, p_notes = mark_visuals(img, data)
+                        all_ticks += p_ticks
+                        total_items += len(data)
+                        all_comments.extend(p_notes)
+                        
+                        pdf.add_page()
+                        tmp = f"temp_p{i}.png"
+                        marked_img.save(tmp)
+                        pdf.image(tmp, 0, 0, 210, 297)
+                        os.remove(tmp)
+
+                    perc = (all_ticks/total_items*100) if total_items > 0 else 0
+                    grade = get_grade(perc)
+                    st.session_state.last_comments = all_comments 
+                    
+                    # --- SECURE DATA SAVE ---
+                    new_row = pd.DataFrame([
+                        {
+                            "Date": datetime.now().strftime("%Y-%m-%d"),
+                            "Email": st.session_state.u_email,
+                            "Board": board,
+                            "Subject": code,
+                            "Result": f"{all_ticks}/{total_items}",
+                            "Grade": grade
+                        }
+                    ])
+                    new_row.to_csv(HISTORY_FILE, mode='a', header=not os.path.exists(HISTORY_FILE), index=False, quoting=csv.QUOTE_ALL)
+                    
+                    # Output PDF safely
+                    pdf_output = pdf.output(dest='S')
+                    pdf_bytes = pdf_output.encode('latin-1') if isinstance(pdf_output, str) else bytes(pdf_output)
+
+                    st.success(f"ANALYSIS COMPLETE: {grade} ({all_ticks}/{total_items})")
+                    st.download_button("📥 DOWNLOAD CHECKED SCRIPT", data=pdf_bytes, file_name="AXOM_Checked.pdf")
+                    
+                    # --- REPORT SECTION ---
+                    st.markdown("---")
+                    if st.button("📊 GENERATE DIAGNOSTIC REPORT"):
+                        with st.spinner("AI EVALUATING PERFORMANCE..."):
+                            analysis_prompt = f"Based on these examiner comments: {all_comments}. Tell the student their 2 biggest strengths, 2 biggest weaknesses, and exactly what to revise for {code} exams."
+                            report_resp = client.models.generate_content(model=MODEL_ID, contents=[analysis_prompt])
+                            st.markdown(f'<div class="report-box"><h3>NEURAL DIAGNOSTIC</h3>{report_resp.text}</div>', unsafe_allow_html=True)
+
+                except Exception as e: 
+                    st.error(f"SYSTEM ERROR: {e}")
+
+    with t2:
+        st.header("DATA ARCHIVE")
+        if os.path.exists(HISTORY_FILE):
+            try:
+                df = pd.read_csv(HISTORY_FILE, quoting=csv.QUOTE_ALL, on_bad_lines='warn')
+                user_df = df[df['Email'] == st.session_state.u_email]
+                st.dataframe(user_df.drop(columns=['Email']), use_container_width=True)
+            except Exception:
+                st.error("The history file is corrupted.")
+                if st.button("PURGE CORRUPTED HISTORY"):
+                    os.remove(HISTORY_FILE)
+                    st.rerun()
+        else: 
+            st.info("No records found.")
