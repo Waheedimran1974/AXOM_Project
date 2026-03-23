@@ -2,7 +2,6 @@ import streamlit as st
 from google import genai
 import pandas as pd
 import os
-import io
 import json
 import re
 import csv
@@ -24,7 +23,7 @@ st.markdown("""
     .report-box { padding: 20px; border-left: 5px solid #00d4ff; background: rgba(0, 212, 255, 0.1); margin: 10px 0; border-radius: 0 10px 10px 0; color: #fff; }
     .stButton>button { width: 100%; background: #00d4ff; color: #000; border: none; border-radius: 5px; height: 50px; font-weight: bold; text-transform: uppercase; margin-top: 15px; }
     .stButton>button:hover { background: #008fb3 !important; color: #fff !important; box-shadow: 0 0 15px #00d4ff; }
-    .stTextInput>div>div>input { background: rgba(0, 212, 255, 0.1) !important; color: #00d4ff !important; border: 1px solid #00d4ff !important; text-align: center; font-size: 20px; }
+    .stTextInput>div>div>input { background: rgba(0, 212, 255, 0.1) !important; color: #00d4ff !important; border: 1px solid #00d4ff !important; text-align: center; font-size: 20px; letter-spacing: 2px; }
     h1, h2, h3 { color: #00d4ff !important; text-shadow: 0 0 8px #00d4ff; }
     </style>
     """, unsafe_allow_html=True)
@@ -76,7 +75,7 @@ def send_otp_email(recipient, otp):
             server.send_message(msg)
         return True
     except Exception as e:
-        st.error(f"Email Dispatch Failed: {e}")
+        st.error(f"Email Dispatch Failed. Please check Streamlit Secrets. Error: {e}")
         return False
 
 # --- 4. LOGIN GATEWAY ---
@@ -99,12 +98,13 @@ if not st.session_state.logged_in:
             u_email = st.text_input("ENTER EMAIL ID")
             if st.button("TRANSMIT ACCESS KEY"):
                 if u_email:
-                    code = str(random.randint(100000, 999999))
-                    if send_otp_email(u_email, code):
-                        st.session_state.generated_otp = code
-                        st.session_state.target_email = u_email
-                        st.session_state.otp_sent = True
-                        st.rerun()
+                    with st.spinner("TRANSMITTING TO NETWORK..."):
+                        code = str(random.randint(100000, 999999))
+                        if send_otp_email(u_email, code):
+                            st.session_state.generated_otp = code
+                            st.session_state.target_email = u_email
+                            st.session_state.otp_sent = True
+                            st.rerun()
                 else:
                     st.warning("EMAIL REQUIRED")
         else:
@@ -124,7 +124,7 @@ if not st.session_state.logged_in:
 # --- 5. NEURAL DASHBOARD ---
 else:
     with st.sidebar:
-        st.markdown(f"**USER:**\n`{st.session_state.target_email}`")
+        st.markdown(f"**ACTIVE USER:**\n`{st.session_state.target_email}`")
         if st.button("TERMINATE SESSION"):
             st.session_state.logged_in = False
             st.session_state.otp_sent = False
@@ -139,7 +139,7 @@ else:
         
         c1, c2 = st.columns(2)
         with c1: board = st.text_input("EXAM BOARD", "Cambridge")
-        with c2: code = st.text_input("SUBJECT CODE", "IGCSE Exam")
+        with c2: code = st.text_input("SUBJECT CODE", "IGCSE Biology")
 
         if up_script and st.button("INITIALIZE EVALUATION"):
             with st.spinner("AXOM ANALYZING SCRIPT..."):
@@ -168,7 +168,7 @@ else:
                     grade = get_grade(perc)
                     st.session_state.last_comments = all_comments 
                     
-                    # --- SAVE TO ARCHIVE ---
+                    # --- UNBREAKABLE DATA SAVE ---
                     new_row = pd.DataFrame([{
                         "Date": datetime.now().strftime("%Y-%m-%d"),
                         "Email": st.session_state.target_email,
@@ -177,10 +177,14 @@ else:
                     }])
                     new_row.to_csv(HISTORY_FILE, mode='a', header=not os.path.exists(HISTORY_FILE), index=False, quoting=csv.QUOTE_ALL)
                     
-                    st.success(f"ANALYSIS COMPLETE: {grade}")
-                    st.download_button("📥 DOWNLOAD MARKED PDF", data=bytes(pdf.output(dest='S')), file_name="AXOM_Checked.pdf")
+                    st.success(f"ANALYSIS COMPLETE: {grade} ({all_ticks}/{total_items})")
                     
-                    # --- REPORT BUTTON ---
+                    # Safe PDF Download
+                    pdf_output = pdf.output(dest='S')
+                    pdf_bytes = pdf_output.encode('latin-1') if isinstance(pdf_output, str) else bytes(pdf_output)
+                    st.download_button("📥 DOWNLOAD MARKED PDF", data=pdf_bytes, file_name="AXOM_Checked.pdf")
+                    
+                    # --- DIAGNOSTIC REPORT ---
                     st.markdown("---")
                     if st.button("📊 GENERATE DIAGNOSTIC REPORT"):
                         with st.spinner("AI EVALUATING PERFORMANCE..."):
@@ -195,13 +199,14 @@ else:
         st.header("DATA ARCHIVE")
         if os.path.exists(HISTORY_FILE):
             try:
+                # Anti-crash read logic
                 df = pd.read_csv(HISTORY_FILE, quoting=csv.QUOTE_ALL, on_bad_lines='warn')
                 user_df = df[df['Email'] == st.session_state.target_email]
                 st.dataframe(user_df.drop(columns=['Email']), use_container_width=True)
             except Exception:
-                st.error("History file corrupted.")
-                if st.button("PURGE HISTORY"):
+                st.error("Archive file corrupted.")
+                if st.button("PURGE HISTORY AND FIX"):
                     os.remove(HISTORY_FILE)
                     st.rerun()
         else: 
-            st.info("No records found.")
+            st.info("No records found yet. Run an evaluation to start tracking data.")
