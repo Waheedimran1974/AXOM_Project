@@ -25,6 +25,7 @@ st.markdown("""
     .stButton>button:hover { background: #008fb3 !important; color: #fff !important; box-shadow: 0 0 15px #00d4ff; }
     .stTextInput>div>div>input { background: rgba(0, 212, 255, 0.1) !important; color: #00d4ff !important; border: 1px solid #00d4ff !important; text-align: center; font-size: 20px; letter-spacing: 2px; }
     h1, h2, h3 { color: #00d4ff !important; text-shadow: 0 0 8px #00d4ff; }
+    div[data-testid="stRadio"] > div { background: rgba(0, 212, 255, 0.1); padding: 10px; border-radius: 5px; border: 1px solid #00d4ff;}
     </style>
     """, unsafe_allow_html=True)
 
@@ -139,7 +140,12 @@ else:
         
         c1, c2 = st.columns(2)
         with c1: board = st.text_input("EXAM BOARD", "Cambridge")
-        with c2: code = st.text_input("SUBJECT CODE", "IGCSE Biology")
+        with c2: code = st.text_input("SUBJECT CODE", "IGCSE Math/Physics")
+
+        # --- THE NEW GEOMETRY TOGGLE ---
+        scan_mode = st.radio("SELECT AI PROCESSING MODE:", 
+                             ["Standard Text & Equation Scan", "Advanced Graph & Geometry Analysis"], 
+                             horizontal=True)
 
         if up_script and st.button("INITIALIZE EVALUATION"):
             with st.spinner("AXOM ANALYZING SCRIPT..."):
@@ -148,9 +154,14 @@ else:
                     pdf = FPDF()
                     all_ticks, total_items, all_comments = 0, 0, []
                     
+                    # Determine which prompt to use based on the toggle
+                    if scan_mode == "Standard Text & Equation Scan":
+                        base_prompt = f"Strict {board} examiner mode for {code}. Output ONLY JSON: [{{'type':'tick'|'cross','x':int,'y':int,'comment':str}}]"
+                    else:
+                        base_prompt = f"Strict {board} examiner mode for {code}. GEOMETRY & GRAPH MODE: Critically analyze all plotted graphs, axes, line slopes, curve shapes, and drawn angles. If a graph or angle is incorrect, mark it with a cross and explicitly state the EXACT correct coordinates, formula, or angle in your comment. Output ONLY JSON: [{{'type':'tick'|'cross','x':int,'y':int,'comment':str}}]"
+
                     for i, img in enumerate(script_imgs):
-                        prompt = f"Strict {board} examiner mode for {code}. Output ONLY JSON: [{{'type':'tick'|'cross','x':int,'y':int,'comment':str}}]"
-                        response = client.models.generate_content(model=MODEL_ID, contents=[prompt, img])
+                        response = client.models.generate_content(model=MODEL_ID, contents=[base_prompt, img])
                         data = robust_json_parser(response.text)
                         
                         marked_img, p_ticks, p_notes = mark_visuals(img, data)
@@ -168,7 +179,6 @@ else:
                     grade = get_grade(perc)
                     st.session_state.last_comments = all_comments 
                     
-                    # --- UNBREAKABLE DATA SAVE ---
                     new_row = pd.DataFrame([{
                         "Date": datetime.now().strftime("%Y-%m-%d"),
                         "Email": st.session_state.target_email,
@@ -179,17 +189,16 @@ else:
                     
                     st.success(f"ANALYSIS COMPLETE: {grade} ({all_ticks}/{total_items})")
                     
-                    # Safe PDF Download
                     pdf_output = pdf.output(dest='S')
                     pdf_bytes = pdf_output.encode('latin-1') if isinstance(pdf_output, str) else bytes(pdf_output)
                     st.download_button("📥 DOWNLOAD MARKED PDF", data=pdf_bytes, file_name="AXOM_Checked.pdf")
                     
-                    # --- DIAGNOSTIC REPORT ---
+                    # --- REPORT SECTION ---
                     st.markdown("---")
                     if st.button("📊 GENERATE DIAGNOSTIC REPORT"):
-                        with st.spinner("AI EVALUATING PERFORMANCE..."):
-                            analysis_prompt = f"Based on these examiner comments: {all_comments}. Tell the student their 2 biggest strengths, 2 biggest weaknesses, and exactly what to revise for {code} exams."
-                            report_resp = client.models.generate_content(model=MODEL_ID, contents=[analysis_prompt])
+                        with st.spinner("AI COMPILING GEOMETRY DATA..."):
+                            report_prompt = f"Based on these examiner comments: {all_comments}. Tell the student their 2 biggest strengths, 2 biggest weaknesses. If there were any graph or geometry errors, dedicate a section called 'GRAPH CORRECTIONS' explaining exactly how the curves or angles should have been drawn for {code}."
+                            report_resp = client.models.generate_content(model=MODEL_ID, contents=[report_prompt])
                             st.markdown(f'<div class="report-box"><h3>NEURAL DIAGNOSTIC</h3>{report_resp.text}</div>', unsafe_allow_html=True)
 
                 except Exception as e: 
@@ -199,7 +208,6 @@ else:
         st.header("DATA ARCHIVE")
         if os.path.exists(HISTORY_FILE):
             try:
-                # Anti-crash read logic
                 df = pd.read_csv(HISTORY_FILE, quoting=csv.QUOTE_ALL, on_bad_lines='warn')
                 user_df = df[df['Email'] == st.session_state.target_email]
                 st.dataframe(user_df.drop(columns=['Email']), use_container_width=True)
@@ -209,4 +217,4 @@ else:
                     os.remove(HISTORY_FILE)
                     st.rerun()
         else: 
-            st.info("No records found yet. Run an evaluation to start tracking data.")
+            st.info("No records found yet.")
