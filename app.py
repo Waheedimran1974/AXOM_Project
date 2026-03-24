@@ -167,7 +167,7 @@ else:
         st.markdown(f"**CREDITS:** `{credits_left}` remaining")
         
         st.divider()
-        st.markdown("### 🗄️ RECENT SCANS")
+        st.markdown("###  RECENT SCANS")
         
         # Pull history for this specific user
         hist_df = pd.read_csv(HISTORY_FILE)
@@ -189,20 +189,20 @@ else:
         if st.button("TERMINATE SESSION"):
             st.session_state.logged_in = False; st.session_state.otp_sent = False; st.rerun()
 
-    st.header("NEURAL SCANNER | GEMINI 2.5 FLASH")
+    st.header("NEURAL SCANNER")
     
     if credits_left <= 0 and user_tier != "Admin":
         st.error("INSUFFICIENT CREDITS. Please upgrade your subscription to continue scanning.")
     else:
         col1, col2 = st.columns(2)
-        with col1: board_name = st.text_input("EXAM BOARD", "Cambridge (CIE)")
-        with col2: subject_name = st.text_input("SUBJECT/CODE", "IGCSE Physics")
+        with col1: board_name = st.text_input("EXAM BOARD", "")
+        with col2: subject_name = st.text_input("SUBJECT/CODE", "")
 
         up_script = st.file_uploader("1. UPLOAD STUDENT SCRIPT (PDF)", type=['pdf'])
         up_ms = st.file_uploader("2. UPLOAD MARK SCHEME (PDF) - OPTIONAL", type=['pdf'])
         
-        if up_script and st.button("EXECUTE FULL SCAN (-1 Credit)"):
-            with st.spinner("INITIATING GEMINI 2.5 CORE..."):
+        if up_script and st.button("EXECUTE FULL SCAN"):
+            with st.spinner("INITIATING WITH GLOBAL AI SYSTEMS..."):
                 try:
                     script_imgs = convert_from_bytes(up_script.read())
                     ms_data = "Standard IGCSE criteria."
@@ -254,6 +254,6 @@ else:
                     log_scan_history(st.session_state.target_email, board_name, subject_name)
 
                     st.success("SCAN COMPLETE: CREDITS DEDUCTED & HISTORY LOGGED")
-                    st.download_button("📥 DOWNLOAD MARKED SCRIPT", data=bytes(pdf.output()), file_name=f"AXOM_Review_{int(time.time())}.pdf")
+                    st.download_button("DOWNLOAD MARKED SCRIPT", data=bytes(pdf.output()), file_name=f"AXOM_Review_{int(time.time())}.pdf")
 
                 except Exception as e: st.error(f"ENGINE CRASH: {e}")
