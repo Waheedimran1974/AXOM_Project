@@ -30,13 +30,15 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. BACKEND ENGINES ---
+# UPGRADED TO GEMINI 2.5 FLASH
 client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
-MODEL_ID = "gemini-2.0-flash" 
+MODEL_ID = "gemini-2.5-flash" 
 
 def generate_correction_graph(equation_str, filename="temp_plot.png"):
     try:
         plt.figure(figsize=(6, 4))
         x = np.linspace(-10, 10, 400)
+        # Handle powers and common math syntax
         safe_eq = equation_str.replace('^', '**').replace('y=', '').strip()
         y = eval(safe_eq, {"np": np, "x": x, "sin": np.sin, "cos": np.cos, "tan": np.tan, "sqrt": np.sqrt})
         plt.plot(x, y, color='#00d4ff', linewidth=2, label=f"y = {safe_eq}")
@@ -93,35 +95,37 @@ else:
             st.session_state.otp_sent = False
             st.rerun()
 
-    st.header("NEURAL SCANNER | MULTI-MODAL")
+    st.header("NEURAL SCANNER | GEMINI 2.5 ENGINE")
     
     col_a, col_b = st.columns(2)
     with col_a: board_name = st.text_input("EXAM BOARD", "Cambridge")
-    with col_b: subject_name = st.text_input("SUBJECT & CODE", "IGCSE Biology")
+    with col_b: subject_name = st.text_input("SUBJECT & CODE", "IGCSE Math/Physics")
 
     up_script = st.file_uploader("1. UPLOAD STUDENT SCRIPT (PDF)", type=['pdf'])
     up_markscheme = st.file_uploader("2. UPLOAD MARK SCHEME (PDF) - OPTIONAL", type=['pdf'])
     
     if up_script and st.button("RUN FULL NEURAL EVALUATION"):
-        with st.spinner("AXOM ANALYZING SCRIPT..."):
+        with st.spinner("GEMINI 2.5 ANALYZING GEOMETRY..."):
             try:
                 script_imgs = convert_from_bytes(up_script.read())
                 
-                # OPTIONAL MARK SCHEME LOGIC
                 ms_text = "Use standard IGCSE/A-Level academic marking criteria."
                 if up_markscheme:
                     ms_imgs = convert_from_bytes(up_markscheme.read())
-                    ms_resp = client.models.generate_content(model=MODEL_ID, contents=["Summarize key points for marking from this mark scheme:", ms_imgs[0]])
+                    ms_resp = client.models.generate_content(model=MODEL_ID, contents=["Identify the marking points from this mark scheme:", ms_imgs[0]])
                     ms_text = ms_resp.text
 
                 pdf = FPDF()
                 all_comments = []
                 
+                # ENHANCED GEOMETRY PROMPT for Gemini 2.5
                 prompt = f"""
-                Senior Examiner Mode: {board_name} {subject_name}. 
-                Mark Scheme Data: {ms_text}
-                If a graph/angle is wrong, add 'CORRECTION: y=f(x)' to your comment.
-                Output ONLY JSON: [{{'type':'tick'|'cross','x':int,'y':int,'comment':str}}]
+                You are a senior examiner for {board_name} {subject_name}.
+                TASK: Mark this script. Use the Mark Scheme: {ms_text}.
+                GEOMETRY RULE: Carefully analyze every graph, angle, and line length. 
+                If a drawing is incorrect, mark it with a cross. 
+                In your 'comment', if a graph is wrong, you MUST include 'CORRECTION: y=f(x)' where f(x) is the correct mathematical function.
+                Output ONLY valid JSON: [{{'type':'tick'|'cross','x':int,'y':int,'comment':str}}]
                 """
 
                 for i, img in enumerate(script_imgs):
@@ -136,29 +140,28 @@ else:
                         all_comments.append(m['comment'])
                     
                     pdf.add_page()
-                    # CRASH FIX: Unique filename and verify save
-                    tmp_name = f"page_cache_{i}_{random.randint(1,999)}.png"
-                    img.save(tmp_name)
-                    if os.path.exists(tmp_name):
-                        pdf.image(tmp_name, x=0, y=0, w=210, h=297)
-                        os.remove(tmp_name) # Clean up immediately
+                    unique_id = f"pg_{i}_{int(time.time())}.png"
+                    img.save(unique_id)
+                    if os.path.exists(unique_id):
+                        pdf.image(unique_id, x=0, y=0, w=210, h=297)
+                        os.remove(unique_id)
 
                 # ADDING CORRECTIONS PAGE
                 pdf.add_page()
                 pdf.set_font("Helvetica", 'B', 16)
-                pdf.cell(200, 10, f"{board_name} {subject_name} - CORRECTIONS", new_x="LMARGIN", new_y="NEXT", align='C')
+                pdf.cell(200, 10, f"AXOM | {board_name} {subject_name} CORRECTIONS", new_x="LMARGIN", new_y="NEXT", align='C')
                 
                 y_pos = 30
                 for comm in all_comments:
-                    if "CORRECTION:" in comm and y_pos < 250:
-                        eq = comm.split("CORRECTION:")[1].strip()
-                        if generate_correction_graph(eq, "temp_plt.png"):
+                    if "CORRECTION:" in comm and y_pos < 240:
+                        eq_part = comm.split("CORRECTION:")[1].strip()
+                        if generate_correction_graph(eq_part, "axom_plot.png"):
                             pdf.set_font("Helvetica", '', 11); pdf.set_xy(10, y_pos)
-                            pdf.multi_cell(190, 10, f"Correct graph for: {eq}")
-                            pdf.image("temp_plt.png", x=10, y=y_pos+10, w=100)
-                            y_pos += 90; os.remove("temp_plt.png")
+                            pdf.multi_cell(190, 10, f"Mathematical Correction: {eq_part}")
+                            pdf.image("axom_plot.png", x=10, y=y_pos+10, w=100)
+                            y_pos += 90; os.remove("axom_plot.png")
 
-                st.success("SCAN COMPLETE")
-                st.download_button("📥 DOWNLOAD MARKED SCRIPT", data=bytes(pdf.output()), file_name=f"AXOM_Review.pdf")
+                st.success("SCAN COMPLETE BY GEMINI 2.5")
+                st.download_button("📥 DOWNLOAD MARKED SCRIPT", data=bytes(pdf.output()), file_name=f"AXOM_Review_{int(time.time())}.pdf")
 
             except Exception as e: st.error(f"ENGINE ERROR: {e}")
