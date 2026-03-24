@@ -24,18 +24,22 @@ st.markdown("""
     .stApp { background: radial-gradient(circle, #00122e 0%, #00050d 100%); color: #00d4ff; font-family: 'Courier New', monospace; }
     .future-frame { border: 2px solid #00d4ff; border-radius: 10px; padding: 40px; background: rgba(0, 20, 46, 0.9); box-shadow: 0 0 30px rgba(0, 212, 255, 0.3); text-align: center; }
     .stButton>button { width: 100%; background: #00d4ff !important; color: #000 !important; border: none !important; border-radius: 5px; height: 50px; font-weight: bold; text-transform: uppercase; margin-top: 15px; }
-    .ad-banner { background: linear-gradient(45deg, #FFD700, #DAA520); color: #000; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; margin-top: 20px; border: 2px solid #fff; }
     h1, h2, h3 { color: #00d4ff !important; text-shadow: 0 0 8px #00d4ff; }
+    .history-card { background: rgba(0, 212, 255, 0.05); padding: 10px; border-left: 3px solid #00d4ff; margin-bottom: 8px; font-size: 12px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. THE DATABASE & SUBSCRIPTION SYSTEM ---
+# --- 2. THE DATABASE & HISTORY SYSTEM ---
 DB_FILE = "axom_users.csv"
+HISTORY_FILE = "axom_history.csv"
 
 def init_db():
     if not os.path.exists(DB_FILE):
         df = pd.DataFrame(columns=["email", "tier", "credits"])
         df.to_csv(DB_FILE, index=False)
+    if not os.path.exists(HISTORY_FILE):
+        df_hist = pd.DataFrame(columns=["email", "date", "board", "subject"])
+        df_hist.to_csv(HISTORY_FILE, index=False)
 
 def get_user_data(email):
     df = pd.read_csv(DB_FILE)
@@ -43,7 +47,6 @@ def get_user_data(email):
         user = df[df['email'] == email].iloc[0]
         return user['tier'], int(user['credits'])
     else:
-        # New user gets Free Tier and 3 Credits
         new_row = pd.DataFrame({"email": [email], "tier": ["Free"], "credits": [3]})
         df = pd.concat([df, new_row], ignore_index=True)
         df.to_csv(DB_FILE, index=False)
@@ -54,6 +57,17 @@ def deduct_credit(email):
     df.loc[df['email'] == email, 'credits'] -= 1
     df.to_csv(DB_FILE, index=False)
 
+def log_scan_history(email, board, subject):
+    df_hist = pd.read_csv(HISTORY_FILE)
+    new_log = pd.DataFrame({
+        "email": [email], 
+        "date": [datetime.now().strftime('%Y-%m-%d %H:%M')], 
+        "board": [board], 
+        "subject": [subject]
+    })
+    df_hist = pd.concat([df_hist, new_log], ignore_index=True)
+    df_hist.to_csv(HISTORY_FILE, index=False)
+
 init_db()
 
 # --- 3. BACKEND ENGINES ---
@@ -61,44 +75,34 @@ client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 MODEL_ID = "gemini-2.5-flash" 
 
 def apply_watermark(base_image, logo_path="logo.jpg"):
-    """Fuses the AXOM Logo into the center of the student's paper"""
     try:
         watermark = Image.open(logo_path).convert("RGBA")
-        # Resize logo to cover 60% of the page
         wm_width = int(base_image.width * 0.6)
         wpercent = (wm_width/float(watermark.size[0]))
         wm_height = int((float(watermark.size[1])*float(wpercent)))
         watermark = watermark.resize((wm_width, wm_height), Image.Resampling.LANCZOS)
 
-        # Drop opacity to 15%D (Ghost effect)
         alpha = watermark.split()[3]
         alpha = alpha.point(lambda p: p * 0.15)
         watermark.putalpha(alpha)
 
-        # Center and paste
         position = ((base_image.width - wm_width) // 2, (base_image.height - wm_height) // 2)
         transparent = Image.new('RGBA', base_image.size, (0,0,0,0))
         transparent.paste(base_image, (0,0))
         transparent.paste(watermark, position, mask=watermark)
         return transparent.convert("RGB")
     except Exception as e:
-        return base_image # If logo.jpg is missing, skip watermark
+        return base_image 
 
 def add_axom_branding(pdf):
-    """Applies Footer Branding and Cross-Sell Ads"""
-    pdf.set_y(-25)
+    pdf.set_y(-20)
     pdf.set_font("Helvetica", 'B', 10)
     pdf.set_text_color(0, 212, 255)
     pdf.cell(0, 5, "POWERED BY AXOM NEURAL INTERFACE", align='R', new_x="LMARGIN", new_y="NEXT")
     
     pdf.set_font("Helvetica", 'I', 8)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 5, f"Date: {datetime.now().strftime('%d/%m/%Y')} | Verified via Gemini 2.5 Logic Engine", align='R', new_x="LMARGIN", new_y="NEXT")
-    
-    # The Cross-Sell Footer Ad
-    pdf.set_font("Helvetica", 'B', 8)
-    pdf.set_text_color(218, 165, 32) # Gold
-    pdf.cell(0, 5, "► UPGRADE TO AXOM PRO OR VISIT NEXT STEP FUTURE (NSF) FOR 1-ON-1 TUTORING", align='R')
+    pdf.cell(0, 5, f"Date: {datetime.now().strftime('%d/%m/%Y')} | Verified via Gemini 2.5 Logic Engine", align='R')
     pdf.set_text_color(0, 0, 0)
 
 def generate_correction_graph(eq_str, fname="axom_plt.png"):
@@ -133,7 +137,7 @@ if not st.session_state.logged_in:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
         st.markdown('<div class="future-frame">', unsafe_allow_html=True)
-        try: st.image("logo.jpg", width=150) # Tries to load your logo
+        try: st.image("logo.jpg", width=150) 
         except: pass
         st.title("AXOM | ACCESS")
         if not st.session_state.otp_sent:
@@ -153,7 +157,6 @@ if not st.session_state.logged_in:
 
 # --- 5. THE NEURAL INTERFACE ---
 else:
-    # Check Subscription Status
     user_tier, credits_left = get_user_data(st.session_state.target_email)
 
     with st.sidebar:
@@ -163,32 +166,43 @@ else:
         st.markdown(f"**TIER:** `{user_tier}`")
         st.markdown(f"**CREDITS:** `{credits_left}` remaining")
         
-        # THE AD SYSTEM
-        st.markdown("""
-        <div class="ad-banner">
-            🚀 COMING SOON: AXON<br>
-            <span style='font-size:12px; font-weight:normal;'>Next-Gen Video Learning System.</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.divider()
+        st.markdown("### 🗄️ RECENT SCANS")
         
+        # Pull history for this specific user
+        hist_df = pd.read_csv(HISTORY_FILE)
+        user_hist = hist_df[hist_df['email'] == st.session_state.target_email]
+        
+        if user_hist.empty:
+            st.markdown("<div class='history-card'>No scans on record.</div>", unsafe_allow_html=True)
+        else:
+            # Show the last 5 scans in reverse order (newest first)
+            for _, row in user_hist.tail(5).iloc[::-1].iterrows():
+                st.markdown(f"""
+                <div class='history-card'>
+                    <strong>{row['subject']}</strong><br>
+                    <span style='color:#888;'>{row['date']} | {row['board']}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
         st.divider()
         if st.button("TERMINATE SESSION"):
             st.session_state.logged_in = False; st.session_state.otp_sent = False; st.rerun()
 
-    st.header("NEURAL SCANNER")
+    st.header("NEURAL SCANNER | GEMINI 2.5 FLASH")
     
     if credits_left <= 0 and user_tier != "Admin":
         st.error("INSUFFICIENT CREDITS. Please upgrade your subscription to continue scanning.")
     else:
         col1, col2 = st.columns(2)
-        with col1: board_name = st.text_input("EXAM BOARD", "")
-        with col2: subject_name = st.text_input("SUBJECT/CODE", "")
+        with col1: board_name = st.text_input("EXAM BOARD", "Cambridge (CIE)")
+        with col2: subject_name = st.text_input("SUBJECT/CODE", "IGCSE Physics")
 
         up_script = st.file_uploader("1. UPLOAD STUDENT SCRIPT (PDF)", type=['pdf'])
         up_ms = st.file_uploader("2. UPLOAD MARK SCHEME (PDF) - OPTIONAL", type=['pdf'])
         
         if up_script and st.button("EXECUTE FULL SCAN (-1 Credit)"):
-            with st.spinner("INITIATING EDU AI..."):
+            with st.spinner("INITIATING GEMINI 2.5 CORE..."):
                 try:
                     script_imgs = convert_from_bytes(up_script.read())
                     ms_data = "Standard IGCSE criteria."
@@ -211,14 +225,13 @@ else:
                             draw.text((px, py), "✓" if m['type']=='tick' else "✕", fill=(255,0,0))
                             all_comments.append(m['comment'])
                         
-                        # 1. APPLY WATERMARK TO IMAGE BEFORE SAVING TO PDF
                         watermarked_img = apply_watermark(img)
                         
                         pdf.add_page()
                         tmp_path = f"ax_pg_{i}_{int(time.time())}.png"
                         watermarked_img.save(tmp_path)
                         pdf.image(tmp_path, x=0, y=0, w=210, h=297)
-                        add_axom_branding(pdf) # 2. APPLY FOOTER ADS
+                        add_axom_branding(pdf) 
                         os.remove(tmp_path)
 
                     pdf.add_page()
@@ -236,10 +249,11 @@ else:
                     
                     add_axom_branding(pdf)
 
-                    # 3. DEDUCT CREDIT UPON SUCCESS
+                    # Update Database and Log History
                     deduct_credit(st.session_state.target_email)
+                    log_scan_history(st.session_state.target_email, board_name, subject_name)
 
-                    st.success("SCAN COMPLETE: CREDITS DEDUCTED")
-                    st.download_button("📥 DOWNLOAD MARKED SCRIPT", data=bytes(pdf.output()), file_name=f"AXOM_Review.pdf")
+                    st.success("SCAN COMPLETE: CREDITS DEDUCTED & HISTORY LOGGED")
+                    st.download_button("📥 DOWNLOAD MARKED SCRIPT", data=bytes(pdf.output()), file_name=f"AXOM_Review_{int(time.time())}.pdf")
 
                 except Exception as e: st.error(f"ENGINE CRASH: {e}")
