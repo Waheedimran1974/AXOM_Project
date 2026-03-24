@@ -4,5 +4,7 @@ pandas
 Pillow
 pdf2image
 fpdf2
+matplotlib
+numpy
 gspread
 google-auth
