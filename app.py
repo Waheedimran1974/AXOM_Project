@@ -152,7 +152,7 @@ else:
         if os.path.exists("logo.jpg"): st.image("logo.jpg", use_column_width=True)
         st.markdown(f"**USER:** `{st.session_state.target_email}`\n**CREDITS:** `{creds}`")
         st.divider()
-        st.markdown("### hISTORY")
+        st.markdown("### HISTORY")
         h_df = pd.read_csv(HISTORY_FILE)
         u_h = h_df[h_df['email'] == st.session_state.target_email].tail(5).iloc[::-1]
         for _, r in u_h.iterrows():
@@ -216,5 +216,5 @@ else:
                     add_floating_footer(pdf)
                     deduct_credit(st.session_state.target_email)
                     log_scan_history(st.session_state.target_email, b_n, s_n)
-                    st.download_button("📥 DOWNLOAD", data=bytes(pdf.output()), file_name="AXOM_Marked.pdf")
+                    st.download_button("DOWNLOAD", data=bytes(pdf.output()), file_name="AXOM_Marked.pdf")
                 except Exception as e: st.error(f"ENGINE ERROR: {e}")
