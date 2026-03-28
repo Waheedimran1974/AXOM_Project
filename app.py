@@ -1,14 +1,10 @@
 import streamlit as st
 from google import genai
-import pandas as pd
 import os
 import json
 import re
 import urllib.parse
-import smtplib
-import random
 import io
-from email.message import EmailMessage
 from PIL import Image, ImageDraw
 from pdf2image import convert_from_bytes
 from fpdf import FPDF
@@ -31,7 +27,7 @@ st.markdown("""
 try:
     client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 except Exception:
-    st.error("CRITICAL: API KEY MISSING.")
+    st.error("CRITICAL: API KEY MISSING IN SECRETS.")
     client = None
 
 MODEL_ID = "gemini-2.5-flash"
@@ -61,12 +57,11 @@ def apply_logo(img, logo_path="logo.png"):
 
 # --- 3. SESSION STATE INITIALIZATION ---
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
-if "otp_sent" not in st.session_state: st.session_state.otp_sent = False
 if "user_email" not in st.session_state: st.session_state.user_email = "Guest"
 if "latest_eval" not in st.session_state: st.session_state.latest_eval = []
 if "current_subj" not in st.session_state: st.session_state.current_subj = "General"
 
-# --- 4. ACCESS CONTROL (LOGIN) ---
+# --- 4. ACCESS CONTROL ---
 if not st.session_state.logged_in:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
@@ -79,17 +74,16 @@ if not st.session_state.logged_in:
                 st.session_state.logged_in = True
                 st.rerun()
             else:
-                st.error("Please enter a valid email.")
+                st.error("Please enter a valid email address.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 5. MAIN PRO INTERFACE ---
 else:
     with st.sidebar:
-        st.title("AXOM V3.5 PRO")
+        st.title("AXOM V3.6 PRO")
         if os.path.exists("logo.png"): 
             st.image("logo.png", use_column_width=True)
         
-        # FIXED: Safe access to user_email
         st.write(f"**ACTIVE:** {st.session_state.user_email}")
         
         menu = st.radio("SYSTEM PANEL", ["NEURAL SCAN", "REVISION HUB", "SETTINGS"])
@@ -98,7 +92,6 @@ else:
             st.session_state.user_email = "Guest"
             st.rerun()
 
-    # --- PANEL: NEURAL SCAN ---
     if menu == "NEURAL SCAN":
         st.title("🧠 ADVANCED NEURAL SCANNER")
         
@@ -111,7 +104,7 @@ else:
         up_scheme = col_up2.file_uploader("MARK SCHEME (OPTIONAL)", type=['pdf'])
 
         if up_script and st.button("EXECUTE NEURAL EVALUATION"):
-            with st.spinner("GEMINI 2.5 ANALYZING SCRIPT..."):
+            with st.spinner("GEMINI 2.5 ANALYZING..."):
                 try:
                     script_pages = convert_from_bytes(up_script.read())
                     ms_context = "Use global marking standards."
@@ -134,6 +127,7 @@ else:
                     st.session_state.latest_eval = res.get("summary", {}).get("weaknesses", [])
                     st.session_state.current_subj = subj
 
+                    # --- PRO PDF GENERATOR (FIXED) ---
                     output_pdf = FPDF()
                     page_marks_data = res.get("page_marks", [])
 
@@ -148,17 +142,27 @@ else:
                         st.markdown(f"<div class='page-header'>PAGE {idx+1}</div>", unsafe_allow_html=True)
                         st.image(marked_img, use_column_width=True)
                         
-                        # PDF Construction
-                        temp_path = f"axom_{idx}.png"
-                        marked_img.save(temp_path)
+                        # Use a bytes buffer for PDF images
+                        img_byte_arr = io.BytesIO()
+                        marked_img.save(img_byte_arr, format='PNG')
+                        temp_path = f"axom_temp_{idx}.png"
+                        with open(temp_path, "wb") as f:
+                            f.write(img_byte_arr.getvalue())
+                        
                         output_pdf.add_page()
                         output_pdf.image(temp_path, 0, 0, 210, 297)
                         os.remove(temp_path)
 
                     st.markdown(f"## FINAL GRADE: {res['summary']['grade']}")
                     
-                    # PRO DOWNLOADER (Memory Stream)
-                    pdf_bytes = output_pdf.output(dest='S').encode('latin1')
+                    # --- FIXED DOWNLOADER ---
+                    pdf_output = output_pdf.output(dest='S')
+                    # Ensure we are handling bytes correctly across FPDF versions
+                    if isinstance(pdf_output, str):
+                        pdf_bytes = pdf_output.encode('latin1')
+                    else:
+                        pdf_bytes = bytes(pdf_output)
+
                     st.download_button(
                         label="📩 DOWNLOAD OFFICIAL AXOM REVIEW",
                         data=pdf_bytes,
@@ -168,11 +172,10 @@ else:
 
                 except Exception as e: st.error(f"NEURAL ERROR: {e}")
 
-    # --- PANEL: REVISION HUB ---
     elif menu == "REVISION HUB":
         st.title("📚 ADAPTIVE REVISION HUB")
         if not st.session_state.latest_eval:
-            st.info("Complete a Neural Scan to see your results here.")
+            st.info("Run a Neural Scan to identify gaps in knowledge.")
         else:
             for item in st.session_state.latest_eval:
                 topic = item['topic']
@@ -181,9 +184,9 @@ else:
 
                 st.markdown(f"""
                 <div class="mistake-box">
-                    <h2 style="color: #ff3232; margin:0;">⚠️ TOPIC: {topic.upper()}</h2>
+                    <h2 style="color: #ff3232; margin:0;">⚠️ TARGET: {topic.upper()}</h2>
                     <p style="color: #ccc;">{item['reason']}</p>
-                    <p><a href="{yt_link}" target="_blank" style="color: #00d4ff;">OPEN ON YOUTUBE</a></p>
+                    <p><a href="{yt_link}" target="_blank" style="color: #00d4ff;">WATCH ON YOUTUBE</a></p>
                 </div>
                 """, unsafe_allow_html=True)
                 st.video(f"https://www.youtube.com/embed?listType=search&list={encoded_query}")
