@@ -21,13 +21,16 @@ st.markdown("""
     <style>
     .stApp { background: radial-gradient(circle, #00122e 0%, #00050d 100%); color: #00d4ff; font-family: 'Courier New', monospace; }
     .future-frame { border: 2px solid #00d4ff; border-radius: 10px; padding: 40px; background: rgba(0, 20, 46, 0.9); box-shadow: 0 0 30px rgba(0, 212, 255, 0.3); text-align: center; }
-    .stButton>button { width: 100%; background: #00d4ff !important; color: #000 !important; border: none !important; border-radius: 5px; height: 45px; font-weight: bold; text-transform: uppercase; }
+    .stButton>button { width: 100%; background: #00d4ff !important; color: #000 !important; border: none !important; border-radius: 5px; height: 45px; font-weight: bold; text-transform: uppercase; margin-top: 10px; }
     .ad-slot { background: #000; border: 1px dashed #ffd700; color: #ffd700; padding: 10px; text-align: center; font-size: 10px; margin-top: 10px; }
     
     /* PRO PRICING CARDS */
     .pricing-card { border-radius: 15px; padding: 20px; text-align: center; border: 2px solid #00d4ff; background: rgba(0, 20, 46, 0.8); margin-bottom: 15px;}
     .highlight { border: 3px solid #FF4B4B; box-shadow: 0px 4px 15px rgba(255, 75, 75, 0.3); transform: scale(1.02); }
     .vip-gold { background: linear-gradient(145deg, #FFD700, #FFA500); color: black !important; font-weight: bold; border: none; }
+    
+    /* HUB CARDS */
+    .video-card { border: 1px solid rgba(0, 212, 255, 0.3); background: rgba(0, 20, 46, 0.5); padding: 15px; border-radius: 8px; margin-bottom: 15px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -80,7 +83,24 @@ def log_scan_history(email, board, subject):
 
 init_db()
 
-# --- 3. THE VISUAL ENGINE (PRO ANNOTATIONS) ---
+# --- 3. REVISION HUB KNOWLEDGE BASE ---
+VIDEO_DATABASE = {
+    "Physics": {
+        "Electricity & Circuits": "https://www.youtube.com/watch?v=mc979OhitAg",
+        "Forces & Motion": "https://www.youtube.com/watch?v=aFO4PBolwFg",
+        "Thermal Physics": "https://www.youtube.com/watch?v=kR2eXw2E8i0"
+    },
+    "Chemistry": {
+        "Moles & Stoichiometry": "https://www.youtube.com/watch?v=SjQG3rKSZUQ",
+        "Organic Chemistry": "https://www.youtube.com/watch?v=UloIw7dhnls"
+    },
+    "English": {
+        "Essay Structure": "https://www.youtube.com/watch?v=GgwZz910f1k",
+        "Advanced Punctuation": "https://www.youtube.com/watch?v=wX-y0M-Y80w"
+    }
+}
+
+# --- 4. THE VISUAL ENGINE (PRO ANNOTATIONS) ---
 try:
     client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 except:
@@ -152,11 +172,10 @@ def add_floating_footer(pdf):
     pdf.set_y(-15)
     pdf.set_font("Helvetica", 'I', 7)
     pdf.set_text_color(150, 150, 150)
-    # --- FIXED SYNTAX ERROR BELOW ---
     pdf.cell(0, 10, f"LEGAL: AI Evaluation. Verified by AXOM Systems on {datetime.now().strftime('%d/%m/%Y')}.", align='R')
     pdf.set_auto_page_break(True, margin=30)
 
-# --- 4. SECURITY GATEWAY ---
+# --- 5. SECURITY GATEWAY ---
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "otp_sent" not in st.session_state: st.session_state.otp_sent = False
 
@@ -168,7 +187,7 @@ def send_otp(recip, code):
         return True
     except: return False
 
-# --- 5. INTERFACE ---
+# --- 6. INTERFACE ---
 if not st.session_state.logged_in:
     _, c2, _ = st.columns([1, 2, 1])
     with c2:
@@ -199,7 +218,90 @@ else:
     
     with st.sidebar:
         if os.path.exists("logo.jpg"): st.image("logo.jpg", use_column_width=True)
-        st.write(f"**LEVEL:** {'VIP' if tier == 'VIP' else tier}\n**POWER:** {creds} Credits")
+        st.write(f"**LEVEL:** {'🏆 VIP' if tier == 'VIP' else tier}\n\n**POWER:** {creds} Credits")
         menu = st.radio("PANEL", ["NEURAL SCAN", "REVISION HUB", "SUBSCRIPTION", "SETTINGS"])
         if tier == "Free": st.markdown('<div class="ad-slot">ADS: UNIVERSITY ADMISSIONS 2026</div>', unsafe_allow_html=True)
-        if st.button("LOGOUT"): st.session_state.logged_in = False; st.session_state.otp_sent = False; st.rerun
+        if st.button("LOGOUT"): st.session_state.logged_in = False; st.session_state.otp_sent = False; st.rerun()
+
+    if menu == "NEURAL SCAN":
+        st.title("🧠 NEURAL MARKER")
+        if creds <= 0 and tier != "Admin":
+            st.error("INSUFFICIENT CREDITS.")
+        else:
+            c1, c2 = st.columns(2)
+            b_n = c1.text_input("BOARD", "IGCSE")
+            s_n = c2.text_input("SUBJECT", "Physics")
+            up_s = st.file_uploader("STUDENT SCRIPT", type=['pdf'])
+            up_m = st.file_uploader("MARK SCHEME (OPTIONAL)", type=['pdf'])
+
+            if up_s and st.button("EXECUTE SCAN"):
+                if tier == "Free":
+                    st.warning("AD DELAY: 3s"); time.sleep(3)
+                
+                with st.spinner("ANALYZING..."):
+                    try:
+                        s_imgs = convert_from_bytes(up_s.read())
+                        cost = max(1, (len(s_imgs) + 4) // 5)
+                        if creds < cost and tier != "Admin":
+                            st.error(f"Need {cost} credits."); st.stop()
+
+                        pdf = FPDF()
+                        p_txt = f"Mark {b_n} {s_n}. Output JSON only: [{{'type':'tick'|'cross', 'x':0-1000, 'y':0-1000, 'note':'msg'}}]"
+
+                        for i, img in enumerate(s_imgs):
+                            r = client.models.generate_content(model=MODEL_ID, contents=[p_txt, img])
+                            m_json = json.loads(re.search(r'\[.*\]', r.text, re.DOTALL).group(0))
+                            
+                            marked_img = img.copy()
+                            for m in m_json:
+                                px, py = int((m['x']/1000)*img.width), int((m['y']/1000)*img.height)
+                                marked_img = draw_sticky_note(marked_img, px, py, m['type'], m.get('note', ''))
+                            
+                            w_img = apply_watermark(marked_img)
+                            pdf.add_page()
+                            t_p = f"t_{i}.png"; w_img.save(t_p)
+                            pdf.image(t_p, x=0, y=0, w=210, h=297)
+                            add_floating_footer(pdf)
+                            os.remove(t_p)
+                        
+                        deduct_credit(st.session_state.target_email, cost)
+                        log_scan_history(st.session_state.target_email, b_n, s_n)
+                        st.success("DONE")
+                        st.download_button("GET PDF", data=bytes(pdf.output()), file_name="AXOM_Review.pdf")
+                    except Exception as e: st.error(f"ERROR: {e}")
+
+    elif menu == "REVISION HUB":
+        st.title("📚 ADAPTIVE REVISION HUB")
+        st.write("Targeted knowledge mapping based on verified educational sources.")
+        
+        subject_filter = st.selectbox("Select Subject", ["Physics", "Chemistry", "English"])
+        
+        st.markdown("### Priority Modules")
+        for topic, url in VIDEO_DATABASE[subject_filter].items():
+            st.markdown(f'<div class="video-card">', unsafe_allow_html=True)
+            st.subheader(f"Module: {topic}")
+            st.video(url)
+            
+            # Simulated Active Recall Feature
+            with st.expander("Challenge Module: Active Recall MCQ"):
+                st.write(f"**Question:** What is the fundamental principle underpinning {topic.lower()}?")
+                st.radio("Select Answer:", ["Option A", "Option B", "Option C"])
+                st.button("Submit", key=f"btn_{topic}")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    elif menu == "SUBSCRIPTION":
+        st.title("💎 PREMIUM UPGRADES")
+        c1, c2, c3 = st.columns(3)
+        with c1: st.markdown('<div class="pricing-card"><h3>STARTER</h3><h2>37 SAR</h2><p>21 Credits</p></div>', unsafe_allow_html=True)
+        with c2: st.markdown('<div class="pricing-card highlight"><h3>CRUSHER</h3><h2>94 SAR</h2><p>60 Credits</p></div>', unsafe_allow_html=True)
+        with c3: st.markdown('<div class="pricing-card vip-gold"><h3>VIP</h3><h2>187 SAR</h2><p>150 Credits</p></div>', unsafe_allow_html=True)
+        
+        code = st.text_input("REDEEM CODE")
+        if st.button("ACTIVATE"):
+            if redeem_credits(st.session_state.target_email, code):
+                st.success("CREDITS ADDED!"); time.sleep(1); st.rerun()
+            else: st.error("INVALID CODE")
+
+    elif menu == "SETTINGS": 
+        st.title("⚙️ SETTINGS")
+        st.write("Account management and system diagnostics.")
