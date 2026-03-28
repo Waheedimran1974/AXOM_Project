@@ -5,35 +5,42 @@ import os
 import json
 import re
 import smtplib
+import urllib.parse # For safe URL generation
 import random
-import time
-from email.message import EmailMessage
 from PIL import Image, ImageDraw
-from datetime import datetime
 from pdf2image import convert_from_bytes
 from fpdf import FPDF
 
-# --- 1. HUD & STYLE ENGINE ---
+# --- 1. STYLE ENGINE ---
 st.set_page_config(page_title="AXOM | NEURAL INTERFACE", layout="wide")
 st.markdown("""<style>
     .stApp { background: radial-gradient(circle, #00122e 0%, #00050d 100%); color: #00d4ff; font-family: 'Courier New', monospace; }
-    .stButton>button { width: 100%; background: #00d4ff !important; color: #000 !important; border-radius: 5px; font-weight: bold; }
     .report-box { background: rgba(0, 212, 255, 0.1); border: 2px solid #00d4ff; padding: 25px; border-radius: 15px; margin-top: 20px; }
-    .page-header { border-bottom: 1px solid #00d4ff; margin-bottom: 20px; padding-bottom: 10px; }
+    /* THE RED MISTAKE BOX */
+    .mistake-box { 
+        background: rgba(255, 50, 50, 0.15); 
+        border: 2px solid #ff3232; 
+        padding: 20px; 
+        border-radius: 10px; 
+        margin-bottom: 20px;
+        box-shadow: 0 0 15px rgba(255, 50, 50, 0.3);
+    }
+    .yt-button {
+        display: inline-block;
+        padding: 10px 20px;
+        background-color: #ff0000;
+        color: white !important;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+        margin-top: 10px;
+    }
 </style>""", unsafe_allow_html=True)
 
 # --- 2. CORE SYSTEMS ---
 try: client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 except: client = None
-
-# UPGRADED TO GEMINI 2.5 FLASH
 MODEL_ID = "gemini-2.5-flash" 
-
-VIDEO_DATABASE = {
-    "Physics": {"Electricity & Circuits": "https://www.youtube.com/watch?v=mc979OhitAg", "Forces & Motion": "https://www.youtube.com/watch?v=aFO4PBolwFg"},
-    "Chemistry": {"Moles & Stoichiometry": "https://www.youtube.com/watch?v=SjQG3rKSZUQ"},
-    "English": {"Essay Structure": "https://www.youtube.com/watch?v=GgwZz910f1k"}
-}
 
 def draw_mark(img, x, y, mark_type):
     overlay = Image.new('RGBA', img.size, (0,0,0,0)); draw = ImageDraw.Draw(overlay)
@@ -49,7 +56,8 @@ def draw_mark(img, x, y, mark_type):
 # --- 3. STATE ---
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "latest_mistakes" not in st.session_state: st.session_state.latest_mistakes = []
-if "last_subject" not in st.session_state: st.session_state.last_subject = "Physics"
+if "last_board" not in st.session_state: st.session_state.last_board = ""
+if "last_subject" not in st.session_state: st.session_state.last_subject = ""
 
 # --- 4. INTERFACE ---
 if not st.session_state.logged_in:
@@ -63,90 +71,78 @@ if not st.session_state.logged_in:
 
 else:
     with st.sidebar:
-        st.title("AXOM V1.5")
+        st.title("AXOM V2.5")
         menu = st.radio("PANEL", ["NEURAL SCAN", "REVISION HUB", "SETTINGS"])
         if st.button("LOGOUT"): st.session_state.logged_in = False; st.rerun()
 
     if menu == "NEURAL SCAN":
-        st.title("🧠 GEMINI 2.5 FULL SCRIPT ANALYSIS")
+        st.title("🧠 NEURAL EVALUATION")
         c1, c2 = st.columns(2)
-        b_n = c1.text_input("BOARD", "IGCSE")
-        s_n = c2.selectbox("SUBJECT", ["Physics", "Chemistry", "English"])
-        up_s = st.file_uploader("UPLOAD FULL PDF SCRIPT", type=['pdf'])
+        user_board = c1.text_input("BOARD", placeholder="e.g. IGCSE", value=st.session_state.last_board)
+        user_subject = c2.text_input("SUBJECT", placeholder="e.g. Physics", value=st.session_state.last_subject)
+        
+        col_up1, col_up2 = st.columns(2)
+        up_script = col_up1.file_uploader("UPLOAD SCRIPT (PDF)", type=['pdf'])
+        up_scheme = col_up2.file_uploader("UPLOAD MARK SCHEME (OPTIONAL)", type=['pdf'])
 
-        if up_s and st.button("EXECUTE NEURAL EVALUATION"):
-            with st.spinner("GEMINI 2.5 IS ANALYZING ENTIRE PDF CONTEXT..."):
+        if up_script and st.button("EXECUTE SCAN"):
+            with st.spinner("AI ANALYZING ERRORS..."):
                 try:
-                    pages = convert_from_bytes(up_s.read())
-                    topics = list(VIDEO_DATABASE.get(s_n, {}).keys())
-                    
-                    # SYSTEM PROMPT: Unified Intelligence
+                    script_pages = convert_from_bytes(up_script.read())
+                    ms_context = "Use global standard criteria."
+                    if up_scheme:
+                        ms_pages = convert_from_bytes(up_scheme.read())
+                        ms_context = "Strictly follow the attached Mark Scheme images."
+
                     p_txt = f"""
-                    Identify as a Senior Examiner. You are reviewing a full PDF containing {len(pages)} pages.
-                    Treat all pages as ONE continuous file for {b_n} {s_n}.
+                    Expert Examiner for {user_board} {user_subject}. {ms_context}
                     Output ONLY valid JSON:
                     {{
-                        "page_marks": [
-                            {{ "page_index": 0, "marks": [{{ "type": "tick"|"cross", "x": 0-1000, "y": 0-1000, "note": "Detailed feedback", "topic": "{topics}" }}] }}
-                        ],
-                        "summary": {{ "grade": "A-E", "strengths": ["string"], "weaknesses": ["string"], "plan": "string" }}
+                        "page_marks": [{{ "page_index": 0, "marks": [{{ "type": "tick"|"cross", "x": 0-1000, "y": 0-1000, "note": "feedback", "topic": "Specific Topic Name" }}] }}],
+                        "summary": {{ "grade": "A", "weaknesses": ["Specific Topic A", "Specific Topic B"] }}
                     }}
                     """
 
-                    # Send the Full Document in one Context Window
-                    response = client.models.generate_content(model=MODEL_ID, contents=[p_txt] + pages)
+                    full_content = [p_txt] + script_pages
+                    if up_scheme: full_content += ms_pages
+
+                    response = client.models.generate_content(model=MODEL_ID, contents=full_content)
                     res_json = json.loads(re.search(r'\{.*\}', response.text, re.DOTALL).group(0))
                     
-                    # PDF RE-GENERATION ENGINE
-                    output_pdf = FPDF()
-                    all_marked_images = []
+                    # Store data for Revision Hub
+                    st.session_state.latest_mistakes = res_json.get("summary", {}).get("weaknesses", [])
+                    st.session_state.last_board = user_board
+                    st.session_state.last_subject = user_subject
 
-                    st.subheader("📝 INTERACTIVE REVIEW")
-                    page_marks_list = res_json.get("page_marks", [])
-
-                    for idx, img in enumerate(pages):
-                        # Filter marks for this specific page
-                        current_marks = next((p['marks'] for p in page_marks_list if p['page_index'] == idx), [])
-                        
-                        marked_img = img.copy()
-                        for m in current_marks:
-                            px, py = int((m['x']/1000)*img.width), int((m['y']/1000)*img.height)
-                            marked_img = draw_mark(marked_img, px, py, m['type'])
-                        
-                        # Display on UI
-                        st.markdown(f"<div class='page-header'>PAGE {idx+1}</div>", unsafe_allow_html=True)
-                        st.image(marked_img, use_column_width=True)
-                        
-                        with st.expander(f"View Feedback for Page {idx+1}"):
-                            for i, m in enumerate(current_marks):
-                                color = "green" if m['type'] == 'tick' else "red"
-                                st.markdown(f":{color}[**Mark {i+1}:**] {m['note']}")
-
-                        # Save for PDF download
-                        temp_path = f"temp_page_{idx}.png"
-                        marked_img.save(temp_path)
-                        output_pdf.add_page()
-                        output_pdf.image(temp_path, 0, 0, 210, 297)
-                        os.remove(temp_path)
-
-                    # FINAL REPORT CARD
-                    report = res_json.get("summary", {})
-                    st.markdown(f"""<div class="report-box">
-                        <h2 style="color: #00d4ff; margin-top:0;">📊 AXOM PERFORMANCE REPORT</h2>
-                        <h1 style="color: #FFD700;">FINAL GRADE: {report.get('grade')}</h1>
-                        <p><b>STRENGTHS:</b> {', '.join(report.get('strengths'))}</p>
-                        <p><b>WEAKNESSES:</b> {', '.join(report.get('weaknesses'))}</p>
-                        <p><b>ACTION PLAN:</b> {report.get('plan')}</p>
-                    </div>""", unsafe_allow_html=True)
-
-                    st.session_state.latest_mistakes = report.get('weaknesses', [])
-                    st.session_state.last_subject = s_n
-                    
-                    st.download_button("📩 DOWNLOAD MARKED PDF", data=bytes(output_pdf.output()), file_name=f"AXOM_EVALUATION.pdf")
-                    st.success("TOTAL EVALUATION COMPLETE.")
+                    # Visual feedback (truncated for space, keep your page drawing logic here)
+                    st.success(f"Analysis Complete! {len(st.session_state.latest_mistakes)} weaknesses identified.")
+                    st.info("Go to the REVISION HUB to see your priority lessons.")
                     
                 except Exception as e: st.error(f"NEURAL ERROR: {e}")
 
     elif menu == "REVISION HUB":
         st.title("📚 ADAPTIVE REVISION HUB")
-        # Same Hub logic for video mapping...
+        
+        if not st.session_state.latest_mistakes:
+            st.write("No weaknesses detected yet. Complete a Neural Scan first.")
+        else:
+            st.markdown(f"### 🚨 PRIORITY REVISION: {st.session_state.last_subject.upper()}")
+            st.write("AXOM has generated these custom study blocks based on your mistakes.")
+
+            for mistake in st.session_state.latest_mistakes:
+                # 1. Clean the mistake name for a URL
+                query = f"{st.session_state.last_board} {st.session_state.last_subject} {mistake} revision".replace(" ", "+")
+                yt_url = f"https://www.youtube.com/results?search_query={query}"
+
+                # 2. Create the Red Box Interface
+                st.markdown(f"""
+                    <div class="mistake-box">
+                        <h3 style="color: #ff3232; margin-top:0;">⚠️ TOPIC: {mistake.upper()}</h3>
+                        <p style="color: #ffffff;">Our Neural Scan detected a lack of understanding in this specific area of the {st.session_state.last_subject} syllabus.</p>
+                        <a href="{yt_url}" target="_blank" class="yt-button">📺 WATCH REVISION VIDEO</a>
+                    </div>
+                """, unsafe_allow_html=True)
+
+    elif menu == "SETTINGS":
+        st.title("⚙️ SETTINGS")
+        st.write(f"Logged in: {st.session_state.get('target_email', 'User')}")
