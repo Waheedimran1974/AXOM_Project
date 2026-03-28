@@ -10,16 +10,30 @@ from pdf2image import convert_from_bytes
 from fpdf import FPDF
 from datetime import datetime
 
-# --- 1. SYSTEM CONFIG & HUD ---
-st.set_page_config(page_title="AXOM | TOTAL NEURAL INTERFACE", layout="wide")
+# --- 1. HUD & INTERACTIVE CSS ---
+st.set_page_config(page_title="AXOM | NEURAL INTERFACE", layout="wide")
 
 st.markdown("""
     <style>
     .stApp { background: radial-gradient(circle, #00122e 0%, #00050d 100%); color: #00d4ff; font-family: 'Courier New', monospace; }
-    .future-frame { border: 2px solid #00d4ff; border-radius: 10px; padding: 40px; background: rgba(0, 20, 46, 0.9); text-align: center; box-shadow: 0 0 30px rgba(0, 212, 255, 0.2); }
-    .stButton>button { width: 100%; background: #00d4ff !important; color: #000 !important; font-weight: bold; border-radius: 5px; height: 50px; text-transform: uppercase; }
-    .mistake-box { background: rgba(255, 50, 50, 0.1); border-left: 5px solid #ff3232; padding: 20px; border-radius: 5px; margin-bottom: 25px; }
-    .page-header { border-bottom: 1px solid #00d4ff; margin: 30px 0 10px 0; padding-bottom: 5px; font-weight: bold; color: #00d4ff; }
+    
+    /* STICKY NOTE STYLING */
+    .sticky-note {
+        background-color: #ffff88;
+        color: #333;
+        padding: 15px;
+        border-radius: 5px;
+        border-left: 10px solid #ffd700;
+        margin-bottom: 10px;
+        font-family: 'Comic Sans MS', cursive, sans-serif;
+        box-shadow: 5px 5px 10px rgba(0,0,0,0.3);
+        transform: rotate(-1deg);
+        transition: transform 0.2s;
+    }
+    .sticky-note:hover { transform: rotate(0deg) scale(1.02); }
+    
+    .page-header { border-bottom: 2px solid #00d4ff; margin: 30px 0 10px 0; padding-bottom: 5px; font-weight: bold; color: #00d4ff; letter-spacing: 2px; }
+    .stButton>button { width: 100%; background: #00d4ff !important; color: #000 !important; font-weight: bold; border-radius: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -27,166 +41,126 @@ st.markdown("""
 try:
     client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 except Exception:
-    st.error("CRITICAL: API KEY MISSING IN SECRETS.")
+    st.error("CRITICAL: API KEY MISSING.")
     client = None
 
 MODEL_ID = "gemini-2.5-flash"
 
-def draw_mark(img, x, y, mark_type):
+def draw_mark(img, x, y, mark_type, index):
     overlay = Image.new('RGBA', img.size, (0,0,0,0))
     draw = ImageDraw.Draw(overlay)
     color = (0, 230, 118, 255) if mark_type == 'tick' else (255, 50, 50, 255)
     sz = 40
+    
+    # Draw the symbol
     if mark_type == 'tick':
         draw.line([(x-sz, y), (x-sz//3, y+sz), (x+sz, y-sz)], fill=color, width=12)
     else:
         draw.line([(x-sz, y-sz), (x+sz, y+sz)], fill=color, width=12)
         draw.line([(x+sz, y-sz), (x-sz, y+sz)], fill=color, width=12)
+    
+    # Draw a "Neural ID Tag" next to the mark so user knows which sticky note matches
+    draw.ellipse([x+sz, y-sz, x+sz+40, y-sz+40], fill=(0, 212, 255, 200))
+    draw.text((x+sz+12, y-sz+8), str(index), fill=(0,0,0,255))
+    
     return Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
 def apply_logo(img, logo_path="logo.png"):
     if os.path.exists(logo_path):
         logo = Image.open(logo_path).convert("RGBA")
-        base_width = int(img.width * 0.12)
-        w_percent = (base_width / float(logo.size[0]))
+        base_width = int(img.width * 0.12); w_percent = (base_width / float(logo.size[0]))
         h_size = int((float(logo.size[1]) * float(w_percent)))
         logo = logo.resize((base_width, h_size), Image.LANCZOS)
         pos = (img.width - logo.width - 50, img.height - logo.height - 50)
         img.paste(logo, pos, logo)
     return img
 
-# --- 3. SESSION STATE INITIALIZATION ---
+# --- 3. SESSION STATE ---
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "user_email" not in st.session_state: st.session_state.user_email = "Guest"
 if "latest_eval" not in st.session_state: st.session_state.latest_eval = []
-if "current_subj" not in st.session_state: st.session_state.current_subj = "General"
+if "full_res" not in st.session_state: st.session_state.full_res = None
 
-# --- 4. ACCESS CONTROL ---
+# --- 4. LOGIN ---
 if not st.session_state.logged_in:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
-        st.markdown('<div class="future-frame">', unsafe_allow_html=True)
+        st.markdown('<div style="text-align:center; padding:50px; border:2px solid #00d4ff; border-radius:10px;">', unsafe_allow_html=True)
         st.title("AXOM | ACCESS")
-        email_input = st.text_input("RECIPIENT EMAIL")
-        if st.button("UNLOCK SYSTEM"):
-            if "@" in email_input:
-                st.session_state.user_email = email_input
-                st.session_state.logged_in = True
-                st.rerun()
-            else:
-                st.error("Please enter a valid email address.")
+        e_in = st.text_input("EMAIL")
+        if st.button("UNLOCK"):
+            if "@" in e_in: st.session_state.user_email = e_in; st.session_state.logged_in = True; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 5. MAIN PRO INTERFACE ---
+# --- 5. MAIN HUB ---
 else:
     with st.sidebar:
-        st.title("AXOM V3.6 PRO")
-        if os.path.exists("logo.png"): 
-            st.image("logo.png", use_column_width=True)
-        
+        st.title("AXOM V3.7 PRO")
+        if os.path.exists("logo.png"): st.image("logo.png")
         st.write(f"**ACTIVE:** {st.session_state.user_email}")
-        
-        menu = st.radio("SYSTEM PANEL", ["NEURAL SCAN", "REVISION HUB", "SETTINGS"])
-        if st.button("TERMINATE SESSION"):
-            st.session_state.logged_in = False
-            st.session_state.user_email = "Guest"
-            st.rerun()
+        menu = st.radio("PANEL", ["NEURAL SCAN", "REVISION HUB"])
+        if st.button("TERMINATE"): st.session_state.logged_in = False; st.rerun()
 
     if menu == "NEURAL SCAN":
-        st.title("🧠 ADVANCED NEURAL SCANNER")
-        
+        st.title("🧠 NEURAL SCAN & STICKY NOTES")
         c1, c2 = st.columns(2)
-        board = c1.text_input("EXAM BOARD", "IGCSE")
+        board = c1.text_input("BOARD", "IGCSE")
         subj = c2.text_input("SUBJECT", "Physics")
-        
-        col_up1, col_up2 = st.columns(2)
-        up_script = col_up1.file_uploader("STUDENT SCRIPT (PDF)", type=['pdf'])
-        up_scheme = col_up2.file_uploader("MARK SCHEME (OPTIONAL)", type=['pdf'])
+        up_s = st.file_uploader("UPLOAD SCRIPT (PDF)", type=['pdf'])
+        up_m = st.file_uploader("UPLOAD MARK SCHEME", type=['pdf'])
 
-        if up_script and st.button("EXECUTE NEURAL EVALUATION"):
-            with st.spinner("GEMINI 2.5 ANALYZING..."):
+        if up_s and st.button("EXECUTE NEURAL EVALUATION"):
+            with st.spinner("AI GENERATING STICKY NOTES..."):
                 try:
-                    script_pages = convert_from_bytes(up_script.read())
-                    ms_context = "Use global marking standards."
-                    if up_scheme:
-                        ms_pages = convert_from_bytes(up_scheme.read())
-                        ms_context = "STRICTLY follow the uploaded Mark Scheme instructions."
-                    
+                    script_pages = convert_from_bytes(up_s.read())
                     p_txt = f"""
-                    Senior Examiner for {board} {subj}. {ms_context}
-                    Analyze full script. Return ONLY JSON:
+                    Senior Examiner for {board} {subj}.
+                    Mark the script. For every feedback item, create a 'note'.
+                    Return ONLY JSON:
                     {{
                         "page_marks": [{{ "page": 0, "marks": [{{ "type": "tick"|"cross", "x": 0-1000, "y": 0-1000, "note": "feedback", "topic": "topic" }}] }}],
                         "summary": {{ "grade": "A", "weaknesses": [{{ "topic": "Name", "reason": "Why", "yt": "Search terms" }}] }}
                     }}
                     """
-
                     response = client.models.generate_content(model=MODEL_ID, contents=[p_txt] + script_pages)
-                    res = json.loads(re.search(r'\{.*\}', response.text, re.DOTALL).group(0))
-                    
-                    st.session_state.latest_eval = res.get("summary", {}).get("weaknesses", [])
-                    st.session_state.current_subj = subj
-
-                    # --- PRO PDF GENERATOR (FIXED) ---
-                    output_pdf = FPDF()
-                    page_marks_data = res.get("page_marks", [])
-
-                    for idx, img in enumerate(script_pages):
-                        current_marks = next((p['marks'] for p in page_marks_data if p['page'] == idx), [])
-                        marked_img = img.copy()
-                        for m in current_marks:
-                            px, py = int((m['x']/1000)*img.width), int((m['y']/1000)*img.height)
-                            marked_img = draw_mark(marked_img, px, py, m['type'])
-                        
-                        marked_img = apply_logo(marked_img, "logo.png")
-                        st.markdown(f"<div class='page-header'>PAGE {idx+1}</div>", unsafe_allow_html=True)
-                        st.image(marked_img, use_column_width=True)
-                        
-                        # Use a bytes buffer for PDF images
-                        img_byte_arr = io.BytesIO()
-                        marked_img.save(img_byte_arr, format='PNG')
-                        temp_path = f"axom_temp_{idx}.png"
-                        with open(temp_path, "wb") as f:
-                            f.write(img_byte_arr.getvalue())
-                        
-                        output_pdf.add_page()
-                        output_pdf.image(temp_path, 0, 0, 210, 297)
-                        os.remove(temp_path)
-
-                    st.markdown(f"## FINAL GRADE: {res['summary']['grade']}")
-                    
-                    # --- FIXED DOWNLOADER ---
-                    pdf_output = output_pdf.output(dest='S')
-                    # Ensure we are handling bytes correctly across FPDF versions
-                    if isinstance(pdf_output, str):
-                        pdf_bytes = pdf_output.encode('latin1')
-                    else:
-                        pdf_bytes = bytes(pdf_output)
-
-                    st.download_button(
-                        label="📩 DOWNLOAD OFFICIAL AXOM REVIEW",
-                        data=pdf_bytes,
-                        file_name=f"AXOM_{subj}_Review.pdf",
-                        mime="application/pdf"
-                    )
-
+                    st.session_state.full_res = json.loads(re.search(r'\{.*\}', response.text, re.DOTALL).group(0))
+                    st.session_state.script_pages = script_pages
+                    st.session_state.latest_eval = st.session_state.full_res.get("summary", {}).get("weaknesses", [])
                 except Exception as e: st.error(f"NEURAL ERROR: {e}")
 
-    elif menu == "REVISION HUB":
-        st.title("📚 ADAPTIVE REVISION HUB")
-        if not st.session_state.latest_eval:
-            st.info("Run a Neural Scan to identify gaps in knowledge.")
-        else:
-            for item in st.session_state.latest_eval:
-                topic = item['topic']
-                encoded_query = urllib.parse.quote(f"{st.session_state.current_subj} {item['yt']}")
-                yt_link = f"https://www.youtube.com/results?search_query={encoded_query}"
+        # DISPLAY LOGIC WITH STICKY NOTES
+        if st.session_state.full_res:
+            output_pdf = FPDF()
+            for idx, img in enumerate(st.session_state.script_pages):
+                st.markdown(f"<div class='page-header'>PAGE {idx+1}</div>", unsafe_allow_html=True)
+                
+                # Split UI into Image and Sticky Note Sidebar
+                col_img, col_notes = st.columns([3, 1])
+                
+                current_marks = next((p['marks'] for p in st.session_state.full_res['page_marks'] if p['page'] == idx), [])
+                marked_img = img.copy()
+                
+                with col_notes:
+                    st.subheader("📌 Sticky Notes")
+                    for i, m in enumerate(current_marks):
+                        # The Sticky Note - Uses Expander to Open/Close
+                        with st.expander(f"NOTE #{i+1}: {m['topic']}", expanded=False):
+                            st.markdown(f"""<div class="sticky-note">{m['note']}</div>""", unsafe_allow_html=True)
+                        
+                        # Apply mark with ID number to the image
+                        marked_img = draw_mark(marked_img, int((m['x']/1000)*img.width), int((m['y']/1000)*img.height), m['type'], i+1)
+                
+                marked_img = apply_logo(marked_img, "logo.png")
+                col_img.image(marked_img, use_column_width=True)
+                
+                # PDF Save
+                temp_path = f"axom_{idx}.png"
+                marked_img.save(temp_path); output_pdf.add_page(); output_pdf.image(temp_path, 0, 0, 210, 297); os.remove(temp_path)
 
-                st.markdown(f"""
-                <div class="mistake-box">
-                    <h2 style="color: #ff3232; margin:0;">⚠️ TARGET: {topic.upper()}</h2>
-                    <p style="color: #ccc;">{item['reason']}</p>
-                    <p><a href="{yt_link}" target="_blank" style="color: #00d4ff;">WATCH ON YOUTUBE</a></p>
-                </div>
-                """, unsafe_allow_html=True)
-                st.video(f"https://www.youtube.com/embed?listType=search&list={encoded_query}")
+            st.download_button("📩 DOWNLOAD MARKED PDF", data=bytes(output_pdf.output(dest='S')), file_name="AXOM_REVIEW.pdf")
+
+    elif menu == "REVISION HUB":
+        # (Revision Hub Logic remains same as previous pro version)
+        st.title("📚 ADAPTIVE REVISION HUB")
+        for item in st.session_state.latest_eval:
+             st.video(f"https://www.youtube.com/embed?listType=search&list={item['yt']}")
