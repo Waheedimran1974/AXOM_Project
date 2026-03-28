@@ -26,6 +26,11 @@ st.markdown("""
     .stButton>button { width: 100%; background: #00d4ff !important; color: #000 !important; border: none !important; border-radius: 5px; height: 45px; font-weight: bold; text-transform: uppercase; }
     .ad-slot { background: #000; border: 1px dashed #ffd700; color: #ffd700; padding: 10px; text-align: center; font-size: 10px; margin-top: 10px; }
     .panel-card { background: rgba(0, 212, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid rgba(0, 212, 255, 0.2); margin-bottom: 20px; }
+    
+    /* PRO PRICING CARDS CSS */
+    .pricing-card { border-radius: 15px; padding: 20px; text-align: center; border: 2px solid #00d4ff; background: rgba(0, 20, 46, 0.8); margin-bottom: 15px;}
+    .highlight { border: 3px solid #FF4B4B; box-shadow: 0px 4px 15px rgba(255, 75, 75, 0.3); transform: scale(1.02); }
+    .vip-gold { background: linear-gradient(145deg, #FFD700, #FFA500); color: black !important; font-weight: bold; border: none; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -49,10 +54,29 @@ def get_user_data(email):
         pd.concat([df, new_row], ignore_index=True).to_csv(DB_FILE, index=False)
         return "Free", 3
 
-def deduct_credit(email):
+def deduct_credit(email, amount=1):
     df = pd.read_csv(DB_FILE)
-    df.loc[df['email'] == email, 'credits'] -= 1
+    df.loc[df['email'] == email, 'credits'] -= amount
     df.to_csv(DB_FILE, index=False)
+
+def redeem_credits(email, code_input):
+    """Automated Sales Engine: Validates code and upgrades user"""
+    if code_input.startswith("AXOM-") and len(code_input) > 10:
+        df = pd.read_csv(DB_FILE)
+        # Determine tier and credits based on code pattern (Simple MVP logic)
+        if "VIP" in code_input:
+            df.loc[df['email'] == email, 'credits'] += 150
+            df.loc[df['email'] == email, 'tier'] = "VIP"
+        elif "CRUSH" in code_input:
+            df.loc[df['email'] == email, 'credits'] += 60
+            df.loc[df['email'] == email, 'tier'] = "Pro"
+        else:
+            df.loc[df['email'] == email, 'credits'] += 21
+            if df.loc[df['email'] == email, 'tier'].values[0] == "Free":
+                df.loc[df['email'] == email, 'tier'] = "Pro"
+        df.to_csv(DB_FILE, index=False)
+        return True
+    return False
 
 def log_scan_history(email, board, subject):
     df_hist = pd.read_csv(HISTORY_FILE)
@@ -62,7 +86,12 @@ def log_scan_history(email, board, subject):
 init_db()
 
 # --- 3. THE VISUAL ENGINE (WATERMARKS & STICKY NOTES) ---
-client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
+# Initialize Gemini
+try:
+    client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
+except:
+    client = None # Handles local testing without secrets
+    
 MODEL_ID = "gemini-2.5-flash"
 
 def apply_watermark(base_image, logo_path="logo.jpg"):
@@ -84,49 +113,47 @@ def apply_watermark(base_image, logo_path="logo.jpg"):
         return base_image
 
 def draw_sticky_note(img, x, y, mark_type, text):
-    """Draws a professional sticky note with text wrapping directly on the image"""
+    """Draws High-Visibility Ticks/Crosses and Premium Sticky Notes"""
     overlay = Image.new('RGBA', img.size, (0,0,0,0))
     draw = ImageDraw.Draw(overlay)
     
-    # 1. Draw the Tick or Cross
-    mark_color = (0, 200, 0, 255) if mark_type == 'tick' else (220, 0, 0, 255)
-    symbol = "✓" if mark_type == 'tick' else "✕"
-    
-    # Using default font, scaled up by drawing lines if TTF is unavailable
-    # Streamlit Cloud doesn't always have nice TTF fonts, so we use a robust method
-    try:
-        font = ImageFont.truetype("arial.ttf", 40)
-    except:
-        font = ImageFont.load_default()
-        
-    draw.text((x, y), symbol, fill=mark_color, font=font)
-    
-    # 2. Draw the Sticky Note if there is a comment
-    if text and text.strip().lower() not in ["none", "correct", ""]:
-        # Wrap text so it fits in a box
-        wrapped_text = textwrap.wrap(text, width=25)
-        
-        line_height = 15 # Default spacing
-        box_width = 200
-        box_height = (len(wrapped_text) * line_height) + 20
-        
-        # Position note slightly to the right and below the mark
-        box_x = x + 30
-        box_y = y + 10
-        
-        # Keep box inside image boundaries
-        if box_x + box_width > img.width: box_x = img.width - box_width - 10
-        
-        # Draw semi-transparent Yellow Background
-        draw.rectangle([box_x, box_y, box_x + box_width, box_y + box_height], fill=(255, 242, 171, 230), outline=(200, 180, 50, 255), width=2)
-        
-        # Draw Black Text inside
-        text_y = box_y + 10
-        for line in wrapped_text:
-            draw.text((box_x + 10, text_y), line, fill=(0, 0, 0, 255), font=font)
-            text_y += line_height
+    # 1. SET COLORS & PARAMETERS
+    tick_color = (0, 230, 118, 255)  # Neon Green
+    cross_color = (255, 50, 50, 255) # Bright Red
+    line_width = 6
+    mark_size = 25
 
-    # Merge overlay with original image
+    # 2. DRAW THE MARK
+    if mark_type == 'tick':
+        draw.line([(x-mark_size, y), (x-mark_size//3, y+mark_size), (x+mark_size, y-mark_size)], fill=tick_color, width=line_width)
+    else:
+        draw.line([(x-mark_size, y-mark_size), (x+mark_size, y+mark_size)], fill=cross_color, width=line_width)
+        draw.line([(x+mark_size, y-mark_size), (x-mark_size, y+mark_size)], fill=cross_color, width=line_width)
+
+    # 3. DRAW THE STICKY NOTE
+    if text and text.strip().lower() not in ["none", "correct", ""]:
+        wrapped_text = textwrap.wrap(text, width=22)
+        try: font = ImageFont.truetype("arial.ttf", 18)
+        except: font = ImageFont.load_default()
+
+        box_width = 220
+        line_height = 22
+        box_header_h = 8
+        box_body_h = (len(wrapped_text) * line_height) + 20
+        
+        bx, by = x + 40, y - 20
+        if bx + box_width > img.width: bx = x - box_width - 40
+
+        # Shadow, Body, Header, Text
+        draw.rectangle([bx+4, by+4, bx+box_width+4, by+box_body_h+4], fill=(0,0,0,80))
+        draw.rectangle([bx, by, bx+box_width, by+box_body_h], fill=(255, 255, 150, 255), outline=(0,0,0,255), width=1)
+        draw.rectangle([bx, by, bx+box_width, by+box_header_h], fill=(255, 210, 50, 255))
+        
+        ty = by + 15
+        for line in wrapped_text:
+            draw.text((bx + 12, ty), line, fill=(0, 0, 0, 255), font=font)
+            ty += line_height
+
     return Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
 def add_floating_footer(pdf):
@@ -138,121 +165,4 @@ def add_floating_footer(pdf):
     pdf.set_y(-15)
     pdf.set_font("Helvetica", 'I', 7)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 10, f"LEGAL: AI Evaluation. Verified by AXOM Systems on {datetime.now().strftime('%d/%m/%Y')}.", align='R')
-    pdf.set_auto_page_break(True, margin=30)
-
-# --- 4. SECURITY GATEWAY ---
-if "logged_in" not in st.session_state: st.session_state.logged_in = False
-if "otp_sent" not in st.session_state: st.session_state.otp_sent = False
-
-def send_otp(recip, code):
-    try:
-        msg = EmailMessage(); msg.set_content(f"AXOM ACCESS KEY: {code}"); msg['Subject'] = 'AXOM SECURITY'; msg['From'] = st.secrets["SMTP_EMAIL"]; msg['To'] = recip
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
-            s.login(st.secrets["SMTP_EMAIL"], st.secrets["SMTP_PASS"]); s.send_message(msg)
-        return True
-    except: return False
-
-# --- 5. THE INTERFACE ---
-if not st.session_state.logged_in:
-    _, c2, _ = st.columns([1, 2, 1])
-    with c2:
-        st.markdown('<div class="future-frame">', unsafe_allow_html=True)
-        if os.path.exists("logo.jpg"): st.image("logo.jpg", width=180)
-        st.title("AXOM | ACCESS")
-        if not st.session_state.otp_sent:
-            em = st.text_input("EMAIL")
-            if st.button("GET KEY"):
-                c = str(random.randint(100000, 999999))
-                if send_otp(em, c):
-                    st.session_state.generated_otp, st.session_state.target_email, st.session_state.otp_sent = c, em, True
-                    st.rerun()
-        else:
-            otp = st.text_input("6-DIGIT KEY", type="password")
-            if st.button("UNLOCK"):
-                if otp == st.session_state.generated_otp:
-                    st.session_state.logged_in = True; st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-else:
-    tier, creds = get_user_data(st.session_state.target_email)
-    
-    with st.sidebar:
-        if os.path.exists("logo.jpg"): st.image("logo.jpg", use_column_width=True)
-        st.write(f"**LEVEL:** {tier}\n\n**POWER:** {creds} Credits")
-        menu = st.radio("SELECT PANEL", ["NEURAL SCAN", "REVISION HUB", "ANALYTICS", "SUBSCRIPTION", "SETTINGS"])
-        st.divider()
-        if tier == "Free": st.markdown('<div class="ad-slot">AD-SPACE: GOOGLE CARBON ADS</div>', unsafe_allow_html=True)
-        if st.button("LOGOUT"): st.session_state.logged_in = False; st.rerun()
-
-    # --- THE CORE MARKER ---
-    if menu == "NEURAL SCAN":
-        st.title("🧠 AI NEURAL MARKER")
-        if creds <= 0 and tier != "Admin":
-            st.error("OUT OF CREDITS. Check Subscription Panel.")
-        else:
-            c1, c2 = st.columns(2)
-            with c1: b_n = st.text_input("EXAM BOARD", "")
-            with c2: s_n = st.text_input("SUBJECT", "")
-            
-            up_s = st.file_uploader("STUDENT SCRIPT (PDF)", type=['pdf'])
-            up_m = st.file_uploader("MARK SCHEME (PDF)(OPTIONAL)", type=['pdf'])
-
-            if up_s and st.button("EXECUTE SCAN"):
-                if tier == "Free":
-                    st.warning("WATCHING VIDEO AD... (3 seconds)")
-                    time.sleep(3)
-                
-                with st.spinner("AI ANALYZING..."):
-                    try:
-                        s_imgs = convert_from_bytes(up_s.read())
-                        m_txt = "Apply rigorous standards."
-                        if up_m:
-                            m_txt = client.models.generate_content(model=MODEL_ID, contents=["Extract key marking criteria:", convert_from_bytes(up_m.read())[0]]).text
-
-                        pdf = FPDF()
-                        
-                        # High-Precision JSON Prompt
-                        p_txt = f"""
-                        Mark this {b_n} {s_n} script using these rules: {m_txt}.
-                        Find exactly where the student wrote answers. 
-                        OUTPUT ONLY A JSON LIST. NO TEXT.
-                        Format strictly as: [{{"type":"tick"|"cross", "x":int (0-1000), "y":int (0-1000), "note":"Short correction or tip"}}]
-                        Keep 'note' under 8 words. If correct, leave 'note' empty.
-                        """
-
-                        for i, img in enumerate(s_imgs):
-                            # 503 Retry Logic
-                            m_json = []
-                            for _ in range(3):
-                                try:
-                                    r = client.models.generate_content(model=MODEL_ID, contents=[p_txt, img])
-                                    m_json = json.loads(re.search(r'\[.*\]', r.text, re.DOTALL).group(0))
-                                    break
-                                except: time.sleep(2)
-                            
-                            # Apply Marks and Sticky Notes
-                            marked_img = img.copy()
-                            for m in m_json:
-                                px, py = int((m['x']/1000)*img.width), int((m['y']/1000)*img.height)
-                                marked_img = draw_sticky_note(marked_img, px, py, m['type'], m.get('note', ''))
-                            
-                            w_img = apply_watermark(marked_img)
-                            
-                            pdf.add_page()
-                            t_p = f"t_{i}.png"; w_img.save(t_p)
-                            pdf.image(t_p, x=0, y=0, w=210, h=297)
-                            add_floating_footer(pdf)
-                            os.remove(t_p)
-                        
-                        deduct_credit(st.session_state.target_email)
-                        log_scan_history(st.session_state.target_email, b_n, s_n)
-                        st.success("SCAN COMPLETE")
-                        st.download_button("DOWNLOAD MARKED SCRIPT", data=bytes(pdf.output()), file_name="AXOM_Pro_Review.pdf")
-                    except Exception as e: st.error(f"ENGINE ERROR: {e}")
-
-    # --- OTHER PANELS (Placeholders from v8.0) ---
-    elif menu == "REVISION HUB": st.title("REVISION HUB (In Development)")
-    elif menu == "ANALYTICS": st.title("ANALYTICS (In Development)")
-    elif menu == "SUBSCRIPTION": st.title("💎 AXOM PREMIUM (In Development)")
-    elif menu == "SETTINGS": st.title("⚙️ SETTINGS (In Development)")
+    pdf.cell(0, 10, f"LEGAL: AI Evaluation. Verified by AXOM Systems on {datetime.now().strftime('%d/%m/%Y')
