@@ -103,7 +103,7 @@ else:
 
     # --- VISION SCANNER ---
     if menu == "NEURAL SCAN":
-        st.title("🧠 VISION AI SCANNER")
+        st.title("VISION AI SCANNER")
         c1, c2 = st.columns(2)
         board, subj = c1.text_input("BOARD", "IGCSE"), c2.text_input("SUBJECT", "Physics")
         up_s = st.file_uploader("UPLOAD SCRIPT", type=['pdf'])
