@@ -119,7 +119,7 @@ def show_subscription_plans():
     st.subheader("💎 EXCLUSIVE DEALS")
     c1, c2 = st.columns(2)
     c1.info("**Annual Legacy:** Pay for 10 months, get **2 MONTHS FREE**. Best for long-term IGCSE prep.")
-    c2.warning("**Father & Son Bundle:** Connect two accounts for a **15% discount** on the second sub.")
+    c2.warning("**Family Bundle:** Connect two accounts for a **15% discount** on the second sub.")
 
 # --- 5. APP EXECUTION FLOW ---
 if not st.session_state.logged_in:
