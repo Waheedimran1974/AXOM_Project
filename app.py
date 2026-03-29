@@ -138,7 +138,7 @@ else:
     with st.sidebar:
         st.title("AXOM V6.6 PRO")
         st.markdown(f"<span style='color:#00e5ff;'>● {st.session_state.user_email}</span>", unsafe_allow_html=True)
-        if st.button("💳 UPGRADE PLAN"): st.session_state.show_sub = True
+        if st.button("UPGRADE PLAN"): st.session_state.show_sub = True
         st.markdown("---")
         menu = st.radio("INTERFACE", ["NEURAL SCAN", "REVISION HUB", "NEURAL ARCHIVE"])
         if st.button("EXIT"): 
@@ -152,7 +152,7 @@ else:
             st.rerun()
     
     elif menu == "NEURAL SCAN":
-        st.title("🧠 VISION AI SCANNER")
+        st.title("VISION AI SCANNER")
         c1, c2 = st.columns(2)
         board, subj = c1.text_input("BOARD", "IGCSE"), c2.text_input("SUBJECT", "Physics")
         up_s = st.file_uploader("UPLOAD STUDENT SCRIPT (PDF)", type=['pdf'])
