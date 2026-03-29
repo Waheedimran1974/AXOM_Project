@@ -3,37 +3,52 @@ from google import genai
 import os
 import json
 import re
-import urllib.parse
 import io
 from PIL import Image, ImageDraw, ImageFont
 from pdf2image import convert_from_bytes
 from fpdf import FPDF
-from datetime import datetime
 
-# --- 1. HUD & NEURAL INTERFACE STYLE ---
-st.set_page_config(page_title="AXOM | EXAMINER PRO", layout="wide")
+# --- 1. HUD & EXAMINER INTERFACE STYLING ---
+st.set_page_config(page_title="AXOM | MASTER EXAMINER", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background: radial-gradient(circle at top, #001e3c 0%, #00050d 100%); color: #00d4ff; font-family: 'Courier New', monospace; }
+    .stApp { background: radial-gradient(circle at top, #001224 0%, #000000 100%); color: #00e5ff; font-family: 'Inter', monospace; }
     
-    /* GREEN STICKY (CORRECT) */
+    /* GREEN STICKY (CORRECT - SILENT & GOLDEN) */
     .sticky-green {
-        background: #c8e6c9; color: #1b5e20; padding: 15px; border-radius: 4px;
-        border-left: 10px solid #4caf50; margin-bottom: 15px;
-        box-shadow: 4px 4px 10px rgba(0,0,0,0.3); font-family: 'Comic Sans MS', cursive;
+        background: #d4edda; color: #155724; padding: 10px 15px; border-radius: 2px;
+        border-left: 6px solid #28a745; margin-bottom: 12px;
+        box-shadow: 2px 2px 8px rgba(0,0,0,0.4); 
+        font-family: 'Comic Sans MS', 'Chalkboard SE', cursive; font-weight: bold; font-size: 1.1rem;
     }
     
-    /* RED STICKY (INCORRECT) */
+    /* RED STICKY (INCORRECT - EXPLANATORY) */
     .sticky-red {
-        background: #ffcdd2; color: #b71c1c; padding: 15px; border-radius: 4px;
-        border-left: 10px solid #f44336; margin-bottom: 15px;
-        box-shadow: 4px 4px 10px rgba(0,0,0,0.3); font-family: 'Comic Sans MS', cursive;
+        background: #f8d7da; color: #721c24; padding: 15px; border-radius: 2px;
+        border-left: 6px solid #dc3545; margin-bottom: 15px;
+        box-shadow: 3px 3px 12px rgba(0,0,0,0.5); 
+        font-family: 'Comic Sans MS', 'Chalkboard SE', cursive; font-size: 1rem; line-height: 1.4;
     }
     
-    .red-alert-box { background: rgba(255, 23, 68, 0.1); border: 1px solid #ff1744; padding: 25px; border-radius: 12px; margin-bottom: 20px; }
-    .stButton>button { width: 100%; background: #00d4ff !important; color: #000 !important; font-weight: bold; border-radius: 8px; height: 45px; }
-    .yt-button { display: block; width: 100%; text-align: center; background: #ff0000; color: white !important; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: bold; }
+    .red-alert-box { 
+        background: linear-gradient(145deg, rgba(220, 53, 69, 0.1), rgba(0,0,0,0)); 
+        border: 1px solid #dc3545; padding: 25px; border-radius: 8px; margin-bottom: 25px; 
+    }
+    
+    .stButton>button { 
+        width: 100%; background: linear-gradient(90deg, #00e5ff, #007bff) !important; 
+        color: #fff !important; font-weight: 900; border-radius: 4px; height: 50px; letter-spacing: 1px;
+    }
+    
+    /* DIRECT VIDEO LAUNCH BUTTON */
+    .yt-launch-btn { 
+        display: inline-block; width: 100%; text-align: center; background: #ff0000; 
+        color: #ffffff !important; padding: 14px; border-radius: 6px; 
+        text-decoration: none; font-weight: 900; font-size: 1.1rem; letter-spacing: 1px;
+        transition: all 0.2s ease-in-out;
+    }
+    .yt-launch-btn:hover { background: #cc0000; transform: translateY(-2px); box-shadow: 0 4px 15px rgba(255,0,0,0.4); }
     </style>
     """, unsafe_allow_html=True)
 
@@ -44,22 +59,19 @@ MODEL_ID = "gemini-2.5-flash"
 
 def draw_mark(img, x, y, mark_type, index):
     overlay = Image.new('RGBA', img.size, (0,0,0,0)); draw = ImageDraw.Draw(overlay)
-    # Examiner Colors: Green for Tick, Red for Cross
-    color = (0, 200, 83, 255) if mark_type == 'tick' else (244, 67, 54, 255)
-    sz = 45
+    # Real Examiner Ink Colors
+    color = (0, 160, 0, 255) if mark_type == 'tick' else (220, 20, 60, 255)
+    sz = 40
     
-    # Draw Handwritten Marks
+    # Hand-drawn aesthetic
     if mark_type == 'tick':
-        draw.line([(x-sz, y), (x-sz//3, y+sz), (x+sz, y-sz)], fill=color, width=14)
+        draw.line([(x-sz, y), (x-sz//3, y+sz+10), (x+sz+10, y-sz-10)], fill=color, width=12)
     else:
-        draw.line([(x-sz, y-sz), (x+sz, y+sz)], fill=color, width=14)
-        draw.line([(x+sz, y-sz), (x-sz, y+sz)], fill=color, width=14)
-    
-    # Neural ID Bubble (Examiner Ink Style)
-    draw.ellipse([x+sz, y-sz, x+sz+75, y-sz+75], fill=color)
-    # Using default font but simulating 'Handwritten' sizing
-    draw.text((x+sz+25, y-sz+12), str(index), fill=(255,255,255,255))
-    
+        draw.line([(x-sz, y-sz), (x+sz, y+sz)], fill=color, width=12)
+        draw.line([(x+sz, y-sz), (x-sz, y+sz)], fill=color, width=12)
+        
+    draw.ellipse([x+sz+5, y-sz-5, x+sz+65, y-sz+55], fill=color)
+    draw.text((x+sz+22, y-sz+8), str(index), fill=(255,255,255,255))
     return Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
 def apply_logo(img, logo_path="logo.jpg.png"):
@@ -67,7 +79,7 @@ def apply_logo(img, logo_path="logo.jpg.png"):
         logo = Image.open(logo_path).convert("RGBA")
         base_width = int(img.width * 0.12)
         logo = logo.resize((base_width, int(logo.size[1] * (base_width/logo.size[0]))), Image.LANCZOS)
-        img.paste(logo, (img.width-logo.width-50, img.height-logo.height-50), logo)
+        img.paste(logo, (img.width-logo.width-40, img.height-logo.height-40), logo)
     return img
 
 # --- 3. SESSION STATE ---
@@ -80,72 +92,57 @@ if "pages" not in st.session_state: st.session_state.pages = []
 if not st.session_state.logged_in:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
-        st.markdown('<div style="border:1px solid #00d4ff; padding:40px; border-radius:15px; background:rgba(0,20,46,0.8); text-align:center;">', unsafe_allow_html=True)
-        st.title("AXOM | ACCESS")
-        u_email = st.text_input("EMAIL")
-        if st.button("UNLOCK"):
+        st.markdown('<div style="border:1px solid #00e5ff; padding:50px; border-radius:8px; background:rgba(0,10,20,0.9); text-align:center; box-shadow: 0 0 30px rgba(0, 229, 255, 0.1);">', unsafe_allow_html=True)
+        st.title("AXOM | SECURE UPLINK")
+        u_email = st.text_input("ENTER CREDENTIALS (EMAIL)")
+        if st.button("INITIALIZE SESSION"):
             if "@" in u_email: st.session_state.user_email, st.session_state.logged_in = u_email, True; st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
 else:
     with st.sidebar:
-        st.title("AXOM V4.4 PRO")
-        st.write(f"📡 **SIGNAL:** {st.session_state.user_email}")
+        st.title("AXOM V4.6 PRO")
+        st.markdown(f"<span style='color:#00e5ff;'>● ACTIVE: {st.session_state.user_email}</span>", unsafe_allow_html=True)
         st.markdown("---")
-        menu = st.radio("SELECT", ["NEURAL SCAN", "REVISION HUB"])
-        if st.button("TERMINATE"): st.session_state.logged_in = False; st.rerun()
+        menu = st.radio("COMMAND CENTER", ["NEURAL SCAN", "REVISION HUB"])
+        if st.button("DISCONNECT"): st.session_state.logged_in = False; st.rerun()
 
     # --- SCANNER ---
     if menu == "NEURAL SCAN":
-        st.title("🧠 EXAMINER SCAN")
+        st.title("🧠 MASTER EXAMINER PROTOCOL")
         c1, c2 = st.columns(2)
         board, subj = c1.text_input("BOARD", "IGCSE"), c2.text_input("SUBJECT", "Physics")
         up_s = st.file_uploader("UPLOAD SCRIPT", type=['pdf'])
 
-        if up_s and st.button("START MARKING"):
-            with st.spinner("AI ANALYZING HANDWRITING..."):
+        if up_s and st.button("EXECUTE GRADING ALGORITHM"):
+            with st.spinner("AI EXAMINING LOGIC & VOCABULARY..."):
                 try:
                     raw_pages = convert_from_bytes(up_s.read())
-                    prompt = f"Senior Examiner for {board} {subj}. Return ONLY JSON: {{'page_marks': [{{'page': 0, 'marks': [{{'type': 'tick'|'cross', 'x': 0-1000, 'y': 0-1000, 'note': '...', 'topic': '...' }}] }}], 'weaknesses': [{{'topic': '...', 'reason': '...', 'yt': '...' }}] }}"
+                    
+                    # PROMPT ENGINEERING: Direct URL injection & strict marking criteria
+                    prompt = f"""
+                    You are a strict Senior Examiner for {board} {subj}. 
+                    Evaluate the following script based on the 2022 syllabus criteria.
+                    Focus entirely on logic, scientific vocabulary, and conceptual understanding.
+                    IGNORE mechanical errors such as capitalization and paragraphing structure.
+
+                    Return ONLY a valid JSON object in this exact structure:
+                    {{
+                        "page_marks": [{{ "page": 0, "marks": [{{ "type": "tick"|"cross", "x": 0-1000, "y": 0-1000, "note": "feedback", "topic": "..." }}] }}],
+                        "weaknesses": [{{ "topic": "...", "reason": "...", "direct_vid_url": "https://youtu.be/..." }}]
+                    }}
+
+                    CRITICAL RULES:
+                    1. If type is 'tick', the 'note' MUST be exactly the word 'Correct'. Nothing else.
+                    2. If type is 'cross', the 'note' MUST be a clear explanation of why the logic or vocabulary failed.
+                    3. For 'direct_vid_url', you MUST generate a direct, valid YouTube link (e.g., https://youtu.be/xxx) that explains the core weakness. DO NOT return a search query.
+                    """
+                    
                     response = client.models.generate_content(model=MODEL_ID, contents=[prompt] + raw_pages)
                     st.session_state.eval_data = json.loads(re.search(r'\{.*\}', response.text, re.DOTALL).group(0))
                     st.session_state.pages, st.session_state.current_subj = raw_pages, subj
-                except: st.error("NEURAL SCAN ERROR")
+                except Exception as e: st.error(f"SYSTEM OVERLOAD / SCAN ERROR: {e}")
 
         if st.session_state.eval_data:
             pdf = FPDF()
-            for idx, img in enumerate(st.session_state.pages):
-                st.markdown(f"### PAGE {idx+1}")
-                col_img, col_stickers = st.columns([3, 1])
-                marks = next((p['marks'] for p in st.session_state.eval_data['page_marks'] if p['page'] == idx), [])
-                marked_img = img.copy()
-                
-                with col_stickers:
-                    st.subheader("📌 Examiner Notes")
-                    for i, m in enumerate(marks):
-                        style = "sticky-green" if m['type'] == 'tick' else "sticky-red"
-                        with st.expander(f"NOTE #{i+1}: {m['topic']}", expanded=True):
-                            st.markdown(f'<div class="{style}">{m["note"]}</div>', unsafe_allow_html=True)
-                        marked_img = draw_mark(marked_img, int((m['x']/1000)*img.width), int((m['y']/1000)*img.height), m['type'], i+1)
-                
-                marked_img = apply_logo(marked_img)
-                col_img.image(marked_img, use_column_width=True)
-                
-                t_p = f"t_{idx}.png"; marked_img.save(t_p); pdf.add_page(); pdf.image(t_p,0,0,210,297); os.remove(t_p)
-            
-            p_out = pdf.output(dest='S')
-            st.download_button("📩 DOWNLOAD MARKED PDF", data=p_out.encode('latin1') if isinstance(p_out, str) else bytes(p_out), file_name="AXOM_FEEDBACK.pdf")
-
-    # --- REVISION ---
-    elif menu == "REVISION HUB":
-        st.title("🚨 REVISION HUB")
-        if st.session_state.eval_data:
-            for item in st.session_state.eval_data['weaknesses']:
-                q = urllib.parse.quote(f"{st.session_state.current_subj} {item['yt']}")
-                st.markdown(f"""
-                <div class="red-alert-box">
-                    <h2 style="color:#ff1744;">⚠️ {item['topic'].upper()}</h2>
-                    <p>{item['reason']}</p>
-                    <a href="https://www.youtube.com/results?search_query={q}" target="_blank" class="yt-button">▶ OPEN LESSON</a>
-                </div>
-                """, unsafe_allow_html=True)
+            for idx, img in enumerate(st
