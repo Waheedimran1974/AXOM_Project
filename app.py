@@ -103,7 +103,7 @@ else:
 
     # --- VISION SCANNER ---
     if menu == "NEURAL SCAN":
-        st.title("VISION AI SCANNER")
+        st.title("🧠 VISION AI SCANNER")
         c1, c2 = st.columns(2)
         board, subj = c1.text_input("BOARD", "IGCSE"), c2.text_input("SUBJECT", "Physics")
         up_s = st.file_uploader("UPLOAD SCRIPT", type=['pdf'])
@@ -175,4 +175,6 @@ else:
                 <div class="red-alert-box">
                     <h2 style="color:#f44336; margin:0;">⚠️ TOPIC: {item['topic'].upper()}</h2>
                     <p style="color:#ccc; margin:10px 0;">{item['reason']}</p>
-                    <a href="{item['direct_vid_url']}" target="_blank" style="background:#ff0000; color:#fff; padding:10px; display:block; text-align:center
+                    <a href="{item['direct_vid_url']}" target="_blank" style="background:#ff0000; color:#fff; padding:10px; display:block; text-align:center; text-decoration:none; border-radius:4px; font-weight:bold;">▶ PLAY VIDEO LESSON</a>
+                </div>
+                """, unsafe_allow_html=True)
