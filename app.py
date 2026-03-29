@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 from pdf2image import convert_from_bytes
 from fpdf import FPDF
 
-# --- 1. HUD & INTERFACE STYLING ---
+# --- 1. NEURAL INTERFACE STYLING ---
 st.set_page_config(page_title="AXOM | MASTER EXAMINER", layout="wide")
 
 st.markdown("""
@@ -45,18 +45,18 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CORE UTILITIES ---
+# --- 2. EXAMINER CORE UTILITIES ---
 try: 
     client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 except: 
     client = None
 
-MODEL_ID = "gemini-2.5-flash"
+MODEL_ID = "gemini-2.0-flash" # Optimized for visual scanning
 
 def draw_mark(img, x, y, mark_type, index):
     overlay = Image.new('RGBA', img.size, (0,0,0,0))
     draw = ImageDraw.Draw(overlay)
-    # Real Examiner Red/Green Spectrum
+    # Professional Ink Colors
     color = (0, 160, 0, 255) if mark_type == 'tick' else (220, 20, 60, 255)
     sz = 40
     
@@ -71,7 +71,6 @@ def draw_mark(img, x, y, mark_type, index):
     return Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
 def apply_logo(img, logo_path="logo.jpg.png"):
-    """Corrected function definition and error handling"""
     if os.path.exists(logo_path):
         logo = Image.open(logo_path).convert("RGBA")
         base_width = int(img.width * 0.12)
@@ -81,7 +80,118 @@ def apply_logo(img, logo_path="logo.jpg.png"):
         img.paste(logo, (img.width - logo.width - 40, img.height - logo.height - 40), logo)
     return img
 
-# --- 3. SESSION STATE ---
+# --- 3. SESSION PERSISTENCE ---
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "user_email" not in st.session_state: st.session_state.user_email = ""
-if "eval_data" not in st.session_state: st.
+if "eval_data" not in st.session_state: st.session_state.eval_data = None
+if "pages" not in st.session_state: st.session_state.pages = []
+
+# --- 4. SECURE ACCESS ---
+if not st.session_state.logged_in:
+    _, col2, _ = st.columns([1, 2, 1])
+    with col2:
+        st.markdown('<div style="border:1px solid #00e5ff; padding:50px; border-radius:8px; background:rgba(0,10,20,0.9); text-align:center;">', unsafe_allow_html=True)
+        st.title("AXOM | SECURE UPLINK")
+        u_email = st.text_input("EMAIL")
+        if st.button("INITIALIZE SESSION"):
+            if "@" in u_email: 
+                st.session_state.user_email = u_email
+                st.session_state.logged_in = True
+                st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+else:
+    with st.sidebar:
+        st.title("AXOM V5.0 PRO")
+        st.markdown(f"<span style='color:#00e5ff;'>● USER: {st.session_state.user_email}</span>", unsafe_allow_html=True)
+        st.markdown("---")
+        menu = st.radio("COMMAND CENTER", ["NEURAL SCAN", "REVISION HUB"])
+        if st.button("LOGOUT"): 
+            st.session_state.logged_in = False
+            st.rerun()
+
+    # --- SCANNING ENGINE ---
+    if menu == "NEURAL SCAN":
+        st.title("🧠 NEURAL EXAMINER")
+        c1, c2 = st.columns(2)
+        board, subj = c1.text_input("BOARD", "IGCSE"), c2.text_input("SUBJECT", "Physics")
+        up_s = st.file_uploader("UPLOAD SCRIPT (PDF)", type=['pdf'])
+
+        if up_s and st.button("RUN EVALUATION"):
+            with st.spinner("AI SCANNING HANDWRITING & ANCHORING PAGES..."):
+                try:
+                    raw_pages = convert_from_bytes(up_s.read())
+                    prompt = f"""
+                    You are a Senior Examiner for {board} {subj}. Evaluate based strictly on the 2022 syllabus criteria.
+                    CRITICAL: Focus ONLY on logic and subject-specific vocabulary. 
+                    IGNORE mechanical errors such as capitalization or paragraphing. DO NOT deduct marks for these.
+                    
+                    Return ONLY a JSON object:
+                    {{
+                        "page_marks": [{{ "page": 0, "marks": [{{ "type": "tick"|"cross", "x": 0-1000, "y": 0-1000, "note": "feedback", "topic": "..." }}] }}],
+                        "weaknesses": [{{ "topic": "...", "reason": "...", "direct_vid_url": "https://youtu.be/..." }}]
+                    }}
+                    PAGE RULES: The "page" integer MUST match the index of the image provided (0 for first page, 1 for second). 
+                    Stay strictly on the correct page. Ticks MUST say 'Correct'. Crosses explain the logic gap.
+                    """
+                    response = client.models.generate_content(model=MODEL_ID, contents=[prompt] + raw_pages)
+                    match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                    if match:
+                        st.session_state.eval_data = json.loads(match.group(0))
+                        st.session_state.pages = raw_pages
+                        st.session_state.current_subj = subj
+                    else:
+                        st.error("Neural data parse failure.")
+                except Exception as e:
+                    st.error(f"System Scan Error: {e}")
+
+        # --- OUTPUT GENERATION ---
+        if st.session_state.eval_data:
+            pdf = FPDF()
+            for idx, img in enumerate(st.session_state.pages):
+                st.markdown(f"### PAGE {idx+1}")
+                col_img, col_stickers = st.columns([3, 1])
+                
+                # Fetch only marks tied to this specific page index
+                marks = next((p['marks'] for p in st.session_state.eval_data['page_marks'] if p['page'] == idx), [])
+                marked_img = img.copy()
+                
+                with col_stickers:
+                    st.subheader("📌 Notes")
+                    if not marks:
+                        st.info("No marks for this page.")
+                    for i, m in enumerate(marks):
+                        is_correct = m['type'] == 'tick'
+                        style = "sticky-green" if is_correct else "sticky-red"
+                        with st.expander(f"NOTE #{i+1}: {m['topic']}", expanded=not is_correct):
+                            st.markdown(f'<div class="{style}">{m["note"]}</div>', unsafe_allow_html=True)
+                        marked_img = draw_mark(marked_img, int((m['x']/1000)*img.width), int((m['y']/1000)*img.height), m['type'], i+1)
+                
+                marked_img = apply_logo(marked_img)
+                col_img.image(marked_img, use_column_width=True)
+                
+                # PDF Assembly
+                t_p = f"t_{idx}.png"
+                marked_img.save(t_p)
+                pdf.add_page()
+                pdf.image(t_p, 0, 0, 210, 297)
+                os.remove(t_p)
+            
+            p_out = pdf.output(dest='S')
+            st.download_button("📩 DOWNLOAD FEEDBACK PDF", data=p_out.encode('latin1') if isinstance(p_out, str) else bytes(p_out), file_name=f"AXOM_{subj}_EVAL.pdf")
+
+    # --- REVISION HUB ---
+    elif menu == "REVISION HUB":
+        st.title("🚨 KNOWLEDGE GAPS")
+        if st.session_state.eval_data:
+            for item in st.session_state.eval_data.get('weaknesses', []):
+                v_url = item.get('direct_vid_url', '#')
+                st.markdown(f"""
+                <div class="red-alert-box">
+                    <h2 style="color:#ff3333; margin:0;">⚠️ TOPIC: {item['topic'].upper()}</h2>
+                    <p style="color:#ddd; margin:10px 0;">{item['reason']}</p>
+                    <a href="{v_url}" target="_blank" class="yt-launch-btn">▶ LAUNCH VIDEO LESSON</a>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("Neural scan required to map revision pathways.")
