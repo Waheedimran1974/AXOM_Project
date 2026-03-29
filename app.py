@@ -1,117 +1,183 @@
 import streamlit as st
 import time
-import json
 import re
-import io
-from google import genai
-from PIL import Image, ImageDraw
-from pdf2image import convert_from_bytes
+import random
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-# --- 1. CORE UTILITIES: THE MARKING ENGINE ---
-def draw_academic_mark(img, x, y, is_correct, index):
-    """Draws professional examiner ticks/crosses based on AI coordinates."""
-    overlay = Image.new('RGBA', img.size, (0,0,0,0))
-    draw = ImageDraw.Draw(overlay)
-    # Professional Green (#2E7D32) for Ticks, Deep Red (#C62828) for Crosses
-    color = (46, 125, 50, 255) if is_correct else (198, 40, 40, 255)
-    size = 40
-    
-    if is_correct:
-        # Drawing a geometric tick
-        draw.line([(x-size, y), (x-size//3, y+size), (x+size, y-size)], fill=color, width=12)
-    else:
-        # Drawing a geometric cross
-        draw.line([(x-size, y-size), (x+size, y+size)], fill=color, width=12)
-        draw.line([(x+size, y-size), (x-size, y+size)], fill=color, width=12)
-    
-    # Adding the Question Number Badge
-    draw.ellipse([x+size+5, y-size-5, x+size+75, y-size+65], fill=color)
-    draw.text((x+size+25, y-size+12), str(index), fill=(255,255,255,255))
-    return Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+# --- 1. GLOBAL STYLING (THE AXOM CORE UI) ---
+st.set_page_config(page_title="AXOM | Neural Infrastructure", layout="wide")
 
-# --- 2. THE REVISION HUB MODULE ---
-def render_revision_hub(evaluation_data):
-    st.markdown("### 🚨 NEURAL REVISION HUB")
-    st.write("Analysis of logic gaps and curriculum deficiencies.")
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap');
     
-    for gap in evaluation_data.get('weaknesses', []):
-        with st.container():
-            st.markdown(f"""
-                <div style="background: rgba(255,0,0,0.05); border-left: 4px solid #FF4B4B; padding: 20px; margin-bottom: 15px;">
-                    <span style="color: #FF4B4B; font-weight: 800; font-size: 0.8rem;">CRITICAL GAP: {gap['topic'].upper()}</span>
-                    <p style="margin: 10px 0; color: #DDD;">{gap['reason']}</p>
-                    <a href="{gap.get('video_url', '#')}" style="color: #00E5FF; text-decoration: none; font-size: 0.8rem;">▶ WATCH RELEVANT LECTURE</a>
+    .stApp { background-color: #050505; color: #FFFFFF; font-family: 'Inter', sans-serif; }
+    
+    /* Center Login Box */
+    .auth-card {
+        background: rgba(15, 15, 15, 0.95);
+        border: 1px solid #1A1A1A;
+        padding: 50px;
+        border-radius: 8px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+        max-width: 500px;
+        margin: auto;
+        text-align: center;
+    }
+
+    /* Welcome Header */
+    .welcome-text {
+        font-size: 2.5rem;
+        font-weight: 900;
+        background: linear-gradient(90deg, #FFFFFF, #00E5FF);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 5px;
+    }
+
+    /* Dashboard Metrics */
+    .metric-container {
+        display: flex;
+        gap: 20px;
+        margin: 25px 0;
+    }
+    .metric-card {
+        flex: 1;
+        background: #0A0A0A;
+        border: 1px solid #111;
+        padding: 20px;
+        border-radius: 4px;
+        border-left: 2px solid #00E5FF;
+    }
+
+    /* Inputs & Buttons */
+    .stTextInput>div>div>input {
+        background-color: #0A0A0A !important;
+        border: 1px solid #222 !important;
+        color: #00E5FF !important;
+        height: 50px;
+    }
+    .stButton>button {
+        background: #00E5FF !important;
+        color: #000 !important;
+        font-weight: 800 !important;
+        border-radius: 2px !important;
+        height: 50px;
+        border: none !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. SESSION STATE & SECURITY ---
+if 'step' not in st.session_state: st.session_state.step = "email_gate"
+if 'user_name' not in st.session_state: st.session_state.user_name = ""
+if 'otp_code' not in st.session_state: st.session_state.otp_code = None
+
+def send_otp(email):
+    otp = str(random.randint(100000, 999999))
+    st.session_state.otp_code = otp
+    try:
+        # Securely pulling from Streamlit Secrets
+        msg = MIMEMultipart()
+        msg['Subject'] = f"AXOM Access: {otp}"
+        msg['From'] = f"AXOM System <{st.secrets['SMTP_EMAIL']}>"
+        msg['To'] = email
+        msg.attach(MIMEText(f"Your secure access code is: {otp}", 'plain'))
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()
+            server.login(st.secrets["SMTP_EMAIL"], st.secrets["SMTP_PASS"])
+            server.send_message(msg)
+        return True
+    except: return False
+
+# --- 3. THE NAVIGATION FLOW ---
+
+# STEP 1: EMAIL LOGIN
+if st.session_state.step == "email_gate":
+    _, col, _ = st.columns([1, 1.2, 1])
+    with col:
+        st.markdown('<div class="auth-card">', unsafe_allow_html=True)
+        st.markdown("<h1 style='color:#00E5FF; margin-bottom:0;'>AXOM</h1><p style='color:#666;'>NEURAL GATEWAY</p>", unsafe_allow_html=True)
+        email = st.text_input("Enter Email", placeholder="user@domain.com")
+        if st.button("Generate Access Code"):
+            if "@" in email:
+                with st.spinner("Encrypting..."):
+                    if send_otp(email):
+                        st.session_state.step = "otp_verify"
+                        st.rerun()
+            else: st.error("Invalid Email Format")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# STEP 2: OTP VERIFICATION
+elif st.session_state.step == "otp_verify":
+    _, col, _ = st.columns([1, 1.2, 1])
+    with col:
+        st.markdown('<div class="auth-card">', unsafe_allow_html=True)
+        st.write("Check your inbox for the 6-digit code.")
+        code = st.text_input("Access Code", type="password")
+        if st.button("Verify Identity"):
+            if code == st.session_state.otp_code:
+                st.session_state.step = "name_setup"
+                st.rerun()
+            else: st.error("Authentication Failed")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# STEP 3: NAME REGISTRATION
+elif st.session_state.step == "name_setup":
+    _, col, _ = st.columns([1, 1.2, 1])
+    with col:
+        st.markdown('<div class="auth-card">', unsafe_allow_html=True)
+        st.markdown("<h3>IDENTIFY YOURSELF</h3>", unsafe_allow_html=True)
+        name = st.text_input("Full Name / Alias", placeholder="e.g. Abdullah H.")
+        if st.button("Initialize Dashboard"):
+            if len(name) > 1:
+                st.session_state.user_name = name
+                st.session_state.step = "dashboard"
+                st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# STEP 4: THE MAIN DASHBOARD
+elif st.session_state.step == "dashboard":
+    # Sidebar
+    with st.sidebar:
+        st.markdown(f"<h2 style='color:#00E5FF'>AXOM v1.0</h2>", unsafe_allow_html=True)
+        menu = st.radio("System Menu", ["Overview", "Vision Grader", "Monetary Grant"])
+        if st.button("Sign Out"):
+            st.session_state.step = "email_gate"
+            st.rerun()
+
+    # Main Content
+    st.markdown(f"<div class='welcome-text'>Welcome, {st.session_state.user_name}</div>", unsafe_allow_html=True)
+    st.write("System Status: <span style='color:#00E5FF'>Operational</span>", unsafe_allow_html=True)
+
+    if menu == "Overview":
+        st.markdown("""
+            <div class="metric-container">
+                <div class="metric-card">
+                    <p style="color:#666; font-size:12px; margin:0;">POINTS</p>
+                    <p style="color:#00E5FF; font-size:24px; font-weight:bold; margin:0;">1,420</p>
                 </div>
-            """, unsafe_allow_html=True)
-
-# --- 3. MAIN INTERFACE: NEURAL SCAN ---
-if 'authenticated' in st.session_state and st.session_state.authenticated:
-    # Sidebar navigation is already handled in previous logic
-    menu = st.sidebar.radio("Navigation", ["DASHBOARD", "VISION GRADER", "REVISION HUB", "MONETARY GRANT"])
-
-    if menu == "VISION GRADER":
-        st.subheader("DUAL-STREAM NEURAL ANALYSIS")
+                <div class="metric-card">
+                    <p style="color:#666; font-size:12px; margin:0;">ACCURACY</p>
+                    <p style="color:#00E5FF; font-size:24px; font-weight:bold; margin:0;">88.4%</p>
+                </div>
+                <div class="metric-card">
+                    <p style="color:#666; font-size:12px; margin:0;">RANK</p>
+                    <p style="color:#00E5FF; font-size:24px; font-weight:bold; margin:0;">#42</p>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
         
-        # User inputs for Subject and Board
-        c1, c2 = st.columns(2)
-        with c1: board = st.text_input("EXAM BOARD", "Cambridge IGCSE")
-        with c2: subject = st.text_input("SUBJECT", "Physics P4")
+        st.subheader("Recent Activity")
+        st.info("No neural scans performed in the last 24 hours.")
 
-        # Dual File Uploaders
-        up_student = st.file_uploader("UPLOAD STUDENT SCRIPT (PDF)", type=['pdf'])
-        up_scheme = st.file_uploader("UPLOAD OFFICIAL MARK SCHEME (PDF)", type=['pdf'])
-
-        if up_student and st.button("EXECUTE NEURAL EVALUATION"):
-            with st.status("Analyzing Handwriting and Logic..."):
-                try:
-                    # 1. Convert PDFs to Images for Gemini Vision
-                    student_pages = convert_from_bytes(up_student.read())
-                    payload = ["STUDENT_SCRIPT:"] + student_pages
-                    
-                    system_instr = f"Act as a Senior Lead Examiner for {board} {subject}."
-                    
-                    if up_scheme:
-                        scheme_pages = convert_from_bytes(up_scheme.read())
-                        payload += ["OFFICIAL_MARK_SCHEME:"] + scheme_pages
-                        system_instr += " Strictly follow the provided Mark Scheme for points allocation."
-                    
-                    # 2. AI Processing (Using your secure key from secrets)
-                    # Note: You would call your client.models.generate_content here
-                    time.sleep(3) # Simulating heavy AI processing
-                    
-                    # Mock Response Data for UI testing
-                    st.session_state.last_eval = {
-                        "score": 72,
-                        "page_marks": [
-                            {"page": 0, "marks": [{"x": 800, "y": 200, "correct": True}, {"x": 850, "y": 600, "correct": False}]}
-                        ],
-                        "weaknesses": [
-                            {"topic": "Thermal Physics", "reason": "Failure to define specific heat capacity accurately.", "video_url": "https://youtube.com/example"}
-                        ]
-                    }
-                    st.session_state.current_images = student_pages
-                    st.success("Analysis Optimized. Review marks below.")
-                    
-                except Exception as e:
-                    st.error(f"ENGINE_FAILURE: {e}")
-
-        # Display Marked Results
-        if 'last_eval' in st.session_state:
-            st.divider()
-            st.subheader(f"Marked Script: {st.session_state.last_eval['score']}%")
-            
-            for i, img in enumerate(st.session_state.current_images):
-                page_data = next((p for p in st.session_state.last_eval['page_marks'] if p['page'] == i), None)
-                marked_img = img.copy()
-                
-                if page_data:
-                    for idx, m in enumerate(page_data['marks']):
-                        marked_img = draw_academic_mark(marked_img, m['x'], m['y'], m['correct'], idx+1)
-                
-                st.image(marked_img, caption=f"Page {i+1}", use_column_width=True)
-
-    elif menu == "REVISION HUB":
-        if 'last_eval' in st.session_state:
-            render_revision_hub(st.session_state.last_eval)
-        else:
-            st.info("No active evaluation found. Please upload a script in the Vision Grader.")
+    elif menu == "Monetary Grant":
+        st.markdown("""
+            <div style="background:#0A0A0A; border:1px solid #00E5FF; padding:60px; text-align:center; border-radius:4px;">
+                <p style="color:#00E5FF; font-weight:bold; letter-spacing:2px;">ANNUAL EXCELLENCE GRANT</p>
+                <h1 style="font-size:80px; margin:10px 0;">$5,000.00</h1>
+                <p style="color:#666;">COMING SOON: RECRUITMENT CYCLE 2026</p>
+            </div>
+        """, unsafe_allow_html=True)
