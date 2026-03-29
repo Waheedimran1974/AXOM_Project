@@ -8,12 +8,12 @@ from PIL import Image, ImageDraw
 from pdf2image import convert_from_bytes
 from fpdf import FPDF
 
-# --- 1. HUD & HIGH-TECH STYLING ---
-st.set_page_config(page_title="AXOM | NEURAL INTERFACE", layout="wide")
+# --- 1. HUD & INTERFACE STYLING ---
+st.set_page_config(page_title="AXOM | MASTER EXAMINER", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background: radial-gradient(circle at top, #001224 0%, #000000 100%); color: #00e5ff; font-family: 'Inter', monospace; }
+    .stApp { background: radial-gradient(circle at top, #001224 0%, #000000 100%); color: #00e5ff; font-family: 'Inter', sans-serif; }
     
     .sticky-green {
         background: #d4edda; color: #155724; padding: 12px; border-radius: 4px;
@@ -56,6 +56,7 @@ MODEL_ID = "gemini-2.5-flash"
 def draw_mark(img, x, y, mark_type, index):
     overlay = Image.new('RGBA', img.size, (0,0,0,0))
     draw = ImageDraw.Draw(overlay)
+    # Real Examiner Red/Green Spectrum
     color = (0, 160, 0, 255) if mark_type == 'tick' else (220, 20, 60, 255)
     sz = 40
     
@@ -69,4 +70,18 @@ def draw_mark(img, x, y, mark_type, index):
     draw.text((x+sz+25, y-sz+12), str(index), fill=(255,255,255,255))
     return Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
-def apply_logo(img
+def apply_logo(img, logo_path="logo.jpg.png"):
+    """Corrected function definition and error handling"""
+    if os.path.exists(logo_path):
+        logo = Image.open(logo_path).convert("RGBA")
+        base_width = int(img.width * 0.12)
+        h_ratio = (base_width / float(logo.size[0]))
+        v_size = int((float(logo.size[1]) * float(h_ratio)))
+        logo = logo.resize((base_width, v_size), Image.LANCZOS)
+        img.paste(logo, (img.width - logo.width - 40, img.height - logo.height - 40), logo)
+    return img
+
+# --- 3. SESSION STATE ---
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "user_email" not in st.session_state: st.session_state.user_email = ""
+if "eval_data" not in st.session_state: st.
