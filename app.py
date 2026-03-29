@@ -153,7 +153,7 @@ else:
         
         script = st.file_uploader("UPLOAD SCRIPT (PDF/PNG)", type=['pdf','png','jpg'])
         if script and st.button("EXECUTE ANALYSIS"):
-            with st.status("Initializing Gemini 2.5 Flash..."):
+            with st.status("Initializing..."):
                 time.sleep(2)
                 st.write(f"Aligning with {exam_board} protocols...")
                 time.sleep(1)
