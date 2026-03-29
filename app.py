@@ -8,33 +8,33 @@ from PIL import Image, ImageDraw
 from pdf2image import convert_from_bytes
 from fpdf import FPDF
 
-# --- 1. NEURAL INTERFACE STYLING ---
-st.set_page_config(page_title="AXOM | MASTER EXAMINER", layout="wide")
+# --- 1. HUD & INTERFACE STYLING ---
+st.set_page_config(page_title="AXOM | GEMINI 2.5 PRO", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background: radial-gradient(circle at top, #001224 0%, #000000 100%); color: #00e5ff; font-family: 'Inter', sans-serif; }
+    .stApp { background: radial-gradient(circle at top, #000d1a 0%, #000000 100%); color: #00e5ff; font-family: 'Inter', sans-serif; }
     
     .sticky-green {
-        background: #d4edda; color: #155724; padding: 12px; border-radius: 4px;
-        border-left: 8px solid #28a745; margin-bottom: 12px;
-        box-shadow: 2px 2px 8px rgba(0,0,0,0.4); font-family: 'Comic Sans MS', cursive; font-weight: bold;
+        background: #e8f5e9; color: #2e7d32; padding: 12px; border-radius: 4px;
+        border-left: 8px solid #4caf50; margin-bottom: 12px;
+        box-shadow: 2px 2px 8px rgba(0,0,0,0.3); font-family: 'Comic Sans MS', cursive; font-weight: bold;
     }
     
     .sticky-red {
-        background: #f8d7da; color: #721c24; padding: 15px; border-radius: 4px;
-        border-left: 10px solid #dc3545; margin-bottom: 15px;
-        box-shadow: 3px 3px 12px rgba(0,0,0,0.5); font-family: 'Comic Sans MS', cursive;
+        background: #ffebee; color: #c62828; padding: 15px; border-radius: 4px;
+        border-left: 10px solid #f44336; margin-bottom: 15px;
+        box-shadow: 3px 3px 12px rgba(0,0,0,0.4); font-family: 'Comic Sans MS', cursive;
     }
     
     .red-alert-box { 
-        background: linear-gradient(145deg, rgba(220, 53, 69, 0.1), rgba(0,0,0,0)); 
-        border: 1px solid #dc3545; padding: 25px; border-radius: 8px; margin-bottom: 25px; 
+        background: linear-gradient(145deg, rgba(244, 67, 54, 0.1), rgba(0,0,0,0)); 
+        border: 1px solid #f44336; padding: 25px; border-radius: 8px; margin-bottom: 25px; 
     }
     
     .stButton>button { 
         width: 100%; background: linear-gradient(90deg, #00e5ff, #007bff) !important; 
-        color: #fff !important; font-weight: 900; border-radius: 4px; height: 50px;
+        color: #fff !important; font-weight: 900; border-radius: 4px; height: 50px; border: none;
     }
     
     .yt-launch-btn { 
@@ -45,19 +45,19 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. EXAMINER CORE UTILITIES ---
+# --- 2. CORE UTILITIES ---
 try: 
     client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
 except: 
     client = None
 
-MODEL_ID = "gemini-2.0-flash" # Optimized for visual scanning
+# UPGRADED TO GEMINI 2.5
+MODEL_ID = "gemini-2.5-flash"
 
 def draw_mark(img, x, y, mark_type, index):
     overlay = Image.new('RGBA', img.size, (0,0,0,0))
     draw = ImageDraw.Draw(overlay)
-    # Professional Ink Colors
-    color = (0, 160, 0, 255) if mark_type == 'tick' else (220, 20, 60, 255)
+    color = (46, 125, 50, 255) if mark_type == 'tick' else (198, 40, 40, 255)
     sz = 40
     
     if mark_type == 'tick':
@@ -80,59 +80,67 @@ def apply_logo(img, logo_path="logo.jpg.png"):
         img.paste(logo, (img.width - logo.width - 40, img.height - logo.height - 40), logo)
     return img
 
-# --- 3. SESSION PERSISTENCE ---
-if "logged_in" not in st.session_state: st.session_state.logged_in = False
-if "user_email" not in st.session_state: st.session_state.user_email = ""
-if "eval_data" not in st.session_state: st.session_state.eval_data = None
-if "pages" not in st.session_state: st.session_state.pages = []
+# --- 3. SESSION STATE ---
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "user_email" not in st.session_state:
+    st.session_state.user_email = ""
+if "eval_data" not in st.session_state:
+    st.session_state.eval_data = None
+if "pages" not in st.session_state:
+    st.session_state.pages = []
 
-# --- 4. SECURE ACCESS ---
+# --- 4. ACCESS CONTROL ---
 if not st.session_state.logged_in:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
         st.markdown('<div style="border:1px solid #00e5ff; padding:50px; border-radius:8px; background:rgba(0,10,20,0.9); text-align:center;">', unsafe_allow_html=True)
-        st.title("AXOM | SECURE UPLINK")
-        u_email = st.text_input("EMAIL")
-        if st.button("INITIALIZE SESSION"):
+        st.title("AXOM | NEURAL UPLINK")
+        u_email = st.text_input("CREDENTIALS (EMAIL)")
+        if st.button("AUTHENTICATE"):
             if "@" in u_email: 
                 st.session_state.user_email = u_email
                 st.session_state.logged_in = True
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-
 else:
     with st.sidebar:
-        st.title("AXOM V5.0 PRO")
-        st.markdown(f"<span style='color:#00e5ff;'>● USER: {st.session_state.user_email}</span>", unsafe_allow_html=True)
+        st.title("AXOM V5.5 PRO")
+        st.markdown(f"<span style='color:#00e5ff;'>● SESSION ACTIVE: {st.session_state.user_email}</span>", unsafe_allow_html=True)
         st.markdown("---")
-        menu = st.radio("COMMAND CENTER", ["NEURAL SCAN", "REVISION HUB"])
-        if st.button("LOGOUT"): 
+        menu = st.radio("SELECT PROTOCOL", ["NEURAL SCAN", "REVISION HUB"])
+        if st.button("TERMINATE"): 
             st.session_state.logged_in = False
             st.rerun()
 
-    # --- SCANNING ENGINE ---
+    # --- SCANNER ---
     if menu == "NEURAL SCAN":
-        st.title("🧠 NEURAL EXAMINER")
+        st.title("🧠 GEMINI 2.5 SCANNER")
         c1, c2 = st.columns(2)
         board, subj = c1.text_input("BOARD", "IGCSE"), c2.text_input("SUBJECT", "Physics")
         up_s = st.file_uploader("UPLOAD SCRIPT (PDF)", type=['pdf'])
 
         if up_s and st.button("RUN EVALUATION"):
-            with st.spinner("AI SCANNING HANDWRITING & ANCHORING PAGES..."):
+            with st.spinner("GEMINI 2.5 ANALYZING LOGIC & COORDINATES..."):
                 try:
                     raw_pages = convert_from_bytes(up_s.read())
                     prompt = f"""
-                    You are a Senior Examiner for {board} {subj}. Evaluate based strictly on the 2022 syllabus criteria.
-                    CRITICAL: Focus ONLY on logic and subject-specific vocabulary. 
-                    IGNORE mechanical errors such as capitalization or paragraphing. DO NOT deduct marks for these.
+                    You are a Senior Examiner for {board} {subj}.
+                    Evaluate this script according to the 2022 syllabus.
                     
-                    Return ONLY a JSON object:
+                    CRITICAL RULES:
+                    1. Focus ONLY on logical reasoning and technical vocabulary.
+                    2. IGNORE capitalization, paragraphing, and punctuation. Do not deduct marks for these.
+                    3. If 'tick', the note MUST be exactly 'Correct'.
+                    4. If 'cross', provide a detailed explanation of the logic failure.
+                    5. 'direct_vid_url' must be a direct YouTube link for the specific weakness.
+                    6. The 'page' integer must match the 0-indexed page number of the image.
+                    
+                    Return ONLY JSON:
                     {{
-                        "page_marks": [{{ "page": 0, "marks": [{{ "type": "tick"|"cross", "x": 0-1000, "y": 0-1000, "note": "feedback", "topic": "..." }}] }}],
+                        "page_marks": [{{ "page": 0, "marks": [{{ "type": "tick"|"cross", "x": 0-1000, "y": 0-1000, "note": "...", "topic": "..." }}] }}],
                         "weaknesses": [{{ "topic": "...", "reason": "...", "direct_vid_url": "https://youtu.be/..." }}]
                     }}
-                    PAGE RULES: The "page" integer MUST match the index of the image provided (0 for first page, 1 for second). 
-                    Stay strictly on the correct page. Ticks MUST say 'Correct'. Crosses explain the logic gap.
                     """
                     response = client.models.generate_content(model=MODEL_ID, contents=[prompt] + raw_pages)
                     match = re.search(r'\{.*\}', response.text, re.DOTALL)
@@ -141,25 +149,23 @@ else:
                         st.session_state.pages = raw_pages
                         st.session_state.current_subj = subj
                     else:
-                        st.error("Neural data parse failure.")
+                        st.error("JSON Error: AI returned invalid format.")
                 except Exception as e:
-                    st.error(f"System Scan Error: {e}")
+                    st.error(f"Neural Error: {e}")
 
-        # --- OUTPUT GENERATION ---
         if st.session_state.eval_data:
             pdf = FPDF()
             for idx, img in enumerate(st.session_state.pages):
                 st.markdown(f"### PAGE {idx+1}")
                 col_img, col_stickers = st.columns([3, 1])
                 
-                # Fetch only marks tied to this specific page index
+                # Force strictly page-aligned marks
                 marks = next((p['marks'] for p in st.session_state.eval_data['page_marks'] if p['page'] == idx), [])
                 marked_img = img.copy()
                 
                 with col_stickers:
                     st.subheader("📌 Notes")
-                    if not marks:
-                        st.info("No marks for this page.")
+                    if not marks: st.info("Clear Page")
                     for i, m in enumerate(marks):
                         is_correct = m['type'] == 'tick'
                         style = "sticky-green" if is_correct else "sticky-red"
@@ -170,7 +176,6 @@ else:
                 marked_img = apply_logo(marked_img)
                 col_img.image(marked_img, use_column_width=True)
                 
-                # PDF Assembly
                 t_p = f"t_{idx}.png"
                 marked_img.save(t_p)
                 pdf.add_page()
@@ -178,20 +183,19 @@ else:
                 os.remove(t_p)
             
             p_out = pdf.output(dest='S')
-            st.download_button("📩 DOWNLOAD FEEDBACK PDF", data=p_out.encode('latin1') if isinstance(p_out, str) else bytes(p_out), file_name=f"AXOM_{subj}_EVAL.pdf")
+            st.download_button("📩 DOWNLOAD MARKED PDF", data=p_out.encode('latin1') if isinstance(p_out, str) else bytes(p_out), file_name=f"AXOM_EVAL.pdf")
 
-    # --- REVISION HUB ---
+    # --- REVISION ---
     elif menu == "REVISION HUB":
-        st.title("🚨 KNOWLEDGE GAPS")
+        st.title("🚨 TARGETED REVISION")
         if st.session_state.eval_data:
             for item in st.session_state.eval_data.get('weaknesses', []):
-                v_url = item.get('direct_vid_url', '#')
                 st.markdown(f"""
                 <div class="red-alert-box">
-                    <h2 style="color:#ff3333; margin:0;">⚠️ TOPIC: {item['topic'].upper()}</h2>
-                    <p style="color:#ddd; margin:10px 0;">{item['reason']}</p>
-                    <a href="{v_url}" target="_blank" class="yt-launch-btn">▶ LAUNCH VIDEO LESSON</a>
+                    <h2 style="color:#f44336; margin:0;">⚠️ TOPIC: {item['topic'].upper()}</h2>
+                    <p style="color:#ccc; margin:10px 0;">{item['reason']}</p>
+                    <a href="{item['direct_vid_url']}" target="_blank" class="yt-launch-btn">▶ PLAY VIDEO LESSON</a>
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.info("Neural scan required to map revision pathways.")
+            st.info("Neural scan required.")
