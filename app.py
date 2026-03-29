@@ -4,7 +4,7 @@ import os
 import json
 import re
 import io
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 from pdf2image import convert_from_bytes
 from fpdf import FPDF
 
@@ -15,20 +15,20 @@ st.markdown("""
     <style>
     .stApp { background: radial-gradient(circle at top, #001224 0%, #000000 100%); color: #00e5ff; font-family: 'Inter', monospace; }
     
-    /* GREEN STICKY (CORRECT - SILENT & GOLDEN) */
+    /* GREEN STICKY (CORRECT) */
     .sticky-green {
         background: #d4edda; color: #155724; padding: 10px 15px; border-radius: 2px;
         border-left: 6px solid #28a745; margin-bottom: 12px;
         box-shadow: 2px 2px 8px rgba(0,0,0,0.4); 
-        font-family: 'Comic Sans MS', 'Chalkboard SE', cursive; font-weight: bold; font-size: 1.1rem;
+        font-family: 'Comic Sans MS', cursive; font-weight: bold; font-size: 1.1rem;
     }
     
-    /* RED STICKY (INCORRECT - EXPLANATORY) */
+    /* RED STICKY (INCORRECT) */
     .sticky-red {
         background: #f8d7da; color: #721c24; padding: 15px; border-radius: 2px;
         border-left: 6px solid #dc3545; margin-bottom: 15px;
         box-shadow: 3px 3px 12px rgba(0,0,0,0.5); 
-        font-family: 'Comic Sans MS', 'Chalkboard SE', cursive; font-size: 1rem; line-height: 1.4;
+        font-family: 'Comic Sans MS', cursive; font-size: 1rem; line-height: 1.4;
     }
     
     .red-alert-box { 
@@ -41,7 +41,6 @@ st.markdown("""
         color: #fff !important; font-weight: 900; border-radius: 4px; height: 50px; letter-spacing: 1px;
     }
     
-    /* DIRECT VIDEO LAUNCH BUTTON */
     .yt-launch-btn { 
         display: inline-block; width: 100%; text-align: center; background: #ff0000; 
         color: #ffffff !important; padding: 14px; border-radius: 6px; 
@@ -53,17 +52,19 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 2. CORE UTILITIES ---
-try: client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
-except: client = None
+try: 
+    client = genai.Client(api_key=st.secrets["GENAI_API_KEY"])
+except: 
+    client = None
+
 MODEL_ID = "gemini-2.5-flash"
 
 def draw_mark(img, x, y, mark_type, index):
-    overlay = Image.new('RGBA', img.size, (0,0,0,0)); draw = ImageDraw.Draw(overlay)
-    # Real Examiner Ink Colors
+    overlay = Image.new('RGBA', img.size, (0,0,0,0))
+    draw = ImageDraw.Draw(overlay)
     color = (0, 160, 0, 255) if mark_type == 'tick' else (220, 20, 60, 255)
     sz = 40
     
-    # Hand-drawn aesthetic
     if mark_type == 'tick':
         draw.line([(x-sz, y), (x-sz//3, y+sz+10), (x+sz+10, y-sz-10)], fill=color, width=12)
     else:
@@ -92,26 +93,32 @@ if "pages" not in st.session_state: st.session_state.pages = []
 if not st.session_state.logged_in:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
-        st.markdown('<div style="border:1px solid #00e5ff; padding:50px; border-radius:8px; background:rgba(0,10,20,0.9); text-align:center; box-shadow: 0 0 30px rgba(0, 229, 255, 0.1);">', unsafe_allow_html=True)
+        st.markdown('<div style="border:1px solid #00e5ff; padding:50px; border-radius:8px; background:rgba(0,10,20,0.9); text-align:center;">', unsafe_allow_html=True)
         st.title("AXOM | SECURE UPLINK")
         u_email = st.text_input("ENTER CREDENTIALS (EMAIL)")
         if st.button("INITIALIZE SESSION"):
-            if "@" in u_email: st.session_state.user_email, st.session_state.logged_in = u_email, True; st.rerun()
+            if "@" in u_email: 
+                st.session_state.user_email = u_email
+                st.session_state.logged_in = True
+                st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
 else:
     with st.sidebar:
-        st.title("AXOM V4.6 PRO")
+        st.title("AXOM V4.7 PRO")
         st.markdown(f"<span style='color:#00e5ff;'>● ACTIVE: {st.session_state.user_email}</span>", unsafe_allow_html=True)
         st.markdown("---")
         menu = st.radio("COMMAND CENTER", ["NEURAL SCAN", "REVISION HUB"])
-        if st.button("DISCONNECT"): st.session_state.logged_in = False; st.rerun()
+        if st.button("DISCONNECT"): 
+            st.session_state.logged_in = False
+            st.rerun()
 
     # --- SCANNER ---
     if menu == "NEURAL SCAN":
         st.title("🧠 MASTER EXAMINER PROTOCOL")
         c1, c2 = st.columns(2)
-        board, subj = c1.text_input("BOARD", "IGCSE"), c2.text_input("SUBJECT", "Physics")
+        board = c1.text_input("BOARD", "IGCSE")
+        subj = c2.text_input("SUBJECT", "Physics")
         up_s = st.file_uploader("UPLOAD SCRIPT", type=['pdf'])
 
         if up_s and st.button("EXECUTE GRADING ALGORITHM"):
@@ -119,12 +126,11 @@ else:
                 try:
                     raw_pages = convert_from_bytes(up_s.read())
                     
-                    # PROMPT ENGINEERING: Direct URL injection & strict marking criteria
                     prompt = f"""
                     You are a strict Senior Examiner for {board} {subj}. 
-                    Evaluate the following script based on the 2022 syllabus criteria.
+                    Evaluate the following script based strictly on the 2022 syllabus criteria.
                     Focus entirely on logic, scientific vocabulary, and conceptual understanding.
-                    IGNORE mechanical errors such as capitalization and paragraphing structure.
+                    DO NOT penalize or cut bands for mechanical errors such as capitalization or paragraphing structure. Ignore them completely.
 
                     Return ONLY a valid JSON object in this exact structure:
                     {{
@@ -132,17 +138,81 @@ else:
                         "weaknesses": [{{ "topic": "...", "reason": "...", "direct_vid_url": "https://youtu.be/..." }}]
                     }}
 
-                    CRITICAL RULES:
-                    1. If type is 'tick', the 'note' MUST be exactly the word 'Correct'. Nothing else.
-                    2. If type is 'cross', the 'note' MUST be a clear explanation of why the logic or vocabulary failed.
-                    3. For 'direct_vid_url', you MUST generate a direct, valid YouTube link (e.g., https://youtu.be/xxx) that explains the core weakness. DO NOT return a search query.
+                    CRITICAL ALIGNMENT RULES:
+                    1. The "page" integer MUST correspond exactly to the 0-indexed page of the document where the mark belongs (0 for page 1, 1 for page 2, etc.). Do not mix up the pages.
+                    2. The 'x' and 'y' coordinates (0-1000) MUST be relative to that specific page's dimensions.
+                    3. If type is 'tick', the 'note' MUST be exactly the word 'Correct'.
+                    4. If type is 'cross', the 'note' MUST be a clear explanation of why the logic failed.
+                    5. 'direct_vid_url' MUST be a valid YouTube link (https://youtu.be/xxx).
                     """
                     
                     response = client.models.generate_content(model=MODEL_ID, contents=[prompt] + raw_pages)
-                    st.session_state.eval_data = json.loads(re.search(r'\{.*\}', response.text, re.DOTALL).group(0))
-                    st.session_state.pages, st.session_state.current_subj = raw_pages, subj
-                except Exception as e: st.error(f"SYSTEM OVERLOAD / SCAN ERROR: {e}")
+                    
+                    # Safely extract JSON
+                    match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                    if match:
+                        st.session_state.eval_data = json.loads(match.group(0))
+                        st.session_state.pages = raw_pages
+                        st.session_state.current_subj = subj
+                    else:
+                        st.error("AI returned invalid data format. Please try scanning again.")
+                        
+                except Exception as e: 
+                    st.error(f"SYSTEM OVERLOAD / SCAN ERROR: {e}")
 
         if st.session_state.eval_data:
             pdf = FPDF()
-            for idx, img in enumerate(st
+            for idx, img in enumerate(st.session_state.pages):
+                st.markdown(f"### SCRIPT PAGE {idx+1}")
+                col_img, col_stickers = st.columns([3, 1])
+                
+                # Fetch marks specifically mapped to this exact page index
+                marks = next((p['marks'] for p in st.session_state.eval_data['page_marks'] if p['page'] == idx), [])
+                marked_img = img.copy()
+                
+                with col_stickers:
+                    st.subheader("📌 Examiner Notes")
+                    if not marks:
+                        st.write("No marks recorded for this page.")
+                        
+                    for i, m in enumerate(marks):
+                        is_correct = m['type'] == 'tick'
+                        style = "sticky-green" if is_correct else "sticky-red"
+                        with st.expander(f"NOTE #{i+1}: {m['topic']}", expanded=not is_correct):
+                            st.markdown(f'<div class="{style}">{m["note"]}</div>', unsafe_allow_html=True)
+                            
+                        # Apply marks to the image
+                        marked_img = draw_mark(marked_img, int((m['x']/1000)*img.width), int((m['y']/1000)*img.height), m['type'], i+1)
+                
+                marked_img = apply_logo(marked_img)
+                col_img.image(marked_img, use_column_width=True)
+                
+                # Save to PDF
+                t_p = f"t_{idx}.png"
+                marked_img.save(t_p)
+                pdf.add_page()
+                pdf.image(t_p, 0, 0, 210, 297)
+                os.remove(t_p)
+            
+            p_out = pdf.output(dest='S')
+            pdf_bytes = p_out.encode('latin1') if isinstance(p_out, str) else bytes(p_out)
+            st.download_button("📩 EXTRACT MARKED PDF", data=pdf_bytes, file_name=f"AXOM_{st.session_state.current_subj}_EVAL.pdf")
+
+    # --- REVISION ---
+    elif menu == "REVISION HUB":
+        st.title("🚨 TARGETED REVISION HUB")
+        if st.session_state.eval_data:
+            weaknesses = st.session_state.eval_data.get('weaknesses', [])
+            if not weaknesses:
+                st.success("No critical weaknesses detected in the latest scan.")
+                
+            for item in weaknesses:
+                vid_url = item.get('direct_vid_url', '#')
+                st.markdown(f"""
+                <div class="red-alert-box">
+                    <h2 style="color:#ff3333; margin-top:0;">⚠️ KNOWLEDGE GAP: {item['topic'].upper()}</h2>
+                    <p style="color:#ddd; font-size:1.1rem; line-height:1.5;">{item['reason']}</p>
+                    <br>
+                    <a href="{vid_url}" target="_blank" class="yt-launch-btn">▶ LAUNCH DIRECT VIDEO LESSON</a>
+                </div>
+                """, unsafe
