@@ -96,7 +96,6 @@ def show_subscription_plans():
                 ● 10 PDF Scans / Month<br>
                 ● 2022 Syllabus Logic<br>
                 ● Standard PDF Reports<br>
-                ● Email Support
             </div>
         </div>""", unsafe_allow_html=True)
         if st.button("ACTIVATE BASIC"): st.success("Redirecting to Secure Payment...")
