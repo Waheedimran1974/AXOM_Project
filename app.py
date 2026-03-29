@@ -84,7 +84,7 @@ if "show_sub" not in st.session_state: st.session_state.show_sub = False
 
 # --- 4. THE SUBSCRIPTION ENGINE (STREAMLINED) ---
 def show_subscription_plans():
-    st.title("⚡ SELECT YOUR ACCESS TIER")
+    st.title("SELECT YOUR ACCESS TIER: INCREASE YOUR STATUS TO REACH YOUR MAXIMUM PONTENTIAL")
     col1, col2 = st.columns(2)
     
     with col1:
