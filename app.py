@@ -21,7 +21,7 @@ st.markdown("""
         background: linear-gradient(145deg, #001a33, #000000);
         border: 2px solid #00e5ff; padding: 25px; border-radius: 15px;
         text-align: center; transition: 0.3s; box-shadow: 0px 0px 15px rgba(0, 229, 255, 0.2);
-        position: relative;
+        position: relative; height: 100%;
     }
     .plan-card:hover { transform: translateY(-10px); box-shadow: 0px 0px 30px rgba(0, 229, 255, 0.5); border-color: #ffffff; }
     .price-tag { font-size: 2.2rem; font-weight: 900; color: #ffffff; margin: 10px 0; }
@@ -75,38 +75,51 @@ def apply_logo(img, logo_path="logo.jpg.png"):
     return img
 
 # --- 3. SESSION INITIALIZATION ---
-session_vars = {
-    "logged_in": False, "user_email": "", "eval_history": [], 
-    "current_eval": None, "chat_history": [], "show_sub": False
-}
-for var, val in session_vars.items():
-    if var not in st.session_state: st.session_state[var] = val
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "user_email" not in st.session_state: st.session_state.user_email = ""
+if "eval_history" not in st.session_state: st.session_state.eval_history = []
+if "current_eval" not in st.session_state: st.session_state.current_eval = None
+if "chat_history" not in st.session_state: st.session_state.chat_history = []
+if "show_sub" not in st.session_state: st.session_state.show_sub = False
 
-# --- 4. THE SUBSCRIPTION ENGINE (PROFIT CORE) ---
+# --- 4. THE SUBSCRIPTION ENGINE (STREAMLINED) ---
 def show_subscription_plans():
-    st.title("⚡ NEURAL LATENCY PLANS")
-    col1, col2, col3 = st.columns(3)
-    plans = [
-        ("BASIC SCAN", "$9.99", "10 Scans/mo • 2022 Logic • PDF Export", "ACTIVATE BASIC"),
-        ("PRO EXAMINER", "$24.99", "UNLIMITED Scans • Vision AI • Chat Tutor • Custom MS", "ACTIVATE PRO"),
-        ("INSTITUTION", "$199", "30 Seats • Bulk Dashboard • NITI Standards • 24/7 Support", "CONTACT SALES")
-    ]
-    for i, (name, price, feats, btn) in enumerate(plans):
-        with [col1, col2, col3][i]:
-            is_pro = name == "PRO EXAMINER"
-            st.markdown(f"""
-            <div class="plan-card" {'style="border-color:#ff0055;"' if is_pro else ''}>
-                { '<div class="deal-badge">BEST VALUE</div>' if is_pro else '' }
-                <h3 {'style="color:#ff0055;"' if is_pro else ''}>{name}</h3>
-                <div class="price-tag">{price}<span style="font-size:1rem;">/mo</span></div>
-                <div style="text-align:left; color:#00e5ff; font-size:0.9rem; margin:20px 0;">{feats.replace('•', '<br>●')}</div>
-            </div>""", unsafe_allow_html=True)
-            if st.button(btn, key=f"plan_{i}"): st.success("Uplink Established. Redirecting...")
+    st.title("⚡ SELECT YOUR ACCESS TIER")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        <div class="plan-card">
+            <h3>BASIC SCAN</h3>
+            <div class="price-tag">$9.99<span style="font-size:1rem;">/mo</span></div>
+            <div style="text-align:left; color:#00e5ff; font-size:0.9rem; margin:20px 0;">
+                ● 10 PDF Scans / Month<br>
+                ● 2022 Syllabus Logic<br>
+                ● Standard PDF Reports<br>
+                ● Email Support
+            </div>
+        </div>""", unsafe_allow_html=True)
+        if st.button("ACTIVATE BASIC"): st.success("Redirecting to Secure Payment...")
+
+    with col2:
+        st.markdown("""
+        <div class="plan-card" style="border-color:#ff0055;">
+            <div class="deal-badge">POPULAR</div>
+            <h3 style="color:#ff0055;">PRO EXAMINER</h3>
+            <div class="price-tag">$24.99<span style="font-size:1rem;">/mo</span></div>
+            <div style="text-align:left; color:#00e5ff; font-size:0.9rem; margin:20px 0;">
+                ● <b>UNLIMITED</b> Neural Scans<br>
+                ● <b>VISION AI</b> Graph Analysis<br>
+                ● <b>AI CHAT TUTOR</b> Access<br>
+                ● Custom Mark Scheme Uploads
+            </div>
+        </div>""", unsafe_allow_html=True)
+        if st.button("ACTIVATE PRO"): st.success("Activating Pro Neural Link...")
     
     st.markdown("---")
     st.subheader("💎 EXCLUSIVE DEALS")
     c1, c2 = st.columns(2)
-    c1.info("**Annual Legacy:** Pay for 10 months, get **2 MONTHS FREE**. Best for IGCSE prep.")
+    c1.info("**Annual Legacy:** Pay for 10 months, get **2 MONTHS FREE**. Best for long-term IGCSE prep.")
     c2.warning("**Father & Son Bundle:** Connect two accounts for a **15% discount** on the second sub.")
 
 # --- 5. APP EXECUTION FLOW ---
@@ -124,7 +137,7 @@ if not st.session_state.logged_in:
         st.markdown('</div>', unsafe_allow_html=True)
 else:
     with st.sidebar:
-        st.title("AXOM V6.5 PRO")
+        st.title("AXOM V6.6 PRO")
         st.markdown(f"<span style='color:#00e5ff;'>● {st.session_state.user_email}</span>", unsafe_allow_html=True)
         if st.button("💳 UPGRADE PLAN"): st.session_state.show_sub = True
         st.markdown("---")
@@ -139,7 +152,6 @@ else:
             st.session_state.show_sub = False
             st.rerun()
     
-    # --- SCANNER MODULE ---
     elif menu == "NEURAL SCAN":
         st.title("🧠 VISION AI SCANNER")
         c1, c2 = st.columns(2)
@@ -148,7 +160,7 @@ else:
         up_m = st.file_uploader("UPLOAD MARK SCHEME (OPTIONAL)", type=['pdf'])
 
         if up_s and st.button("EXECUTE NEURAL EVALUATION"):
-            with st.spinner("ANALYZING GRAPHS & HANDWRITING..."):
+            with st.spinner("AI SCANNING..."):
                 try:
                     raw_pages = convert_from_bytes(up_s.read())
                     payload = ["Student Script:"] + raw_pages
@@ -157,12 +169,11 @@ else:
                         payload += ["Mark Scheme Authority:"] + convert_from_bytes(up_m.read())
                         ms_instr = "Use provided Mark Scheme as absolute authority."
                     
-                    prompt = f"Senior Examiner for {board} {subj}. {ms_instr} Analyze drawings/graphs. Ignore capitalization/paragraphs. Return JSON: {{'page_marks':[], 'weaknesses':[]}}"
+                    prompt = f"Senior Examiner for {board} {subj}. {ms_instr} Analyze drawings. Ignore capitalization/paragraphs. Return JSON: {{'page_marks':[], 'weaknesses':[]}}"
                     response = client.models.generate_content(model=MODEL_ID, contents=[prompt] + payload)
                     match = re.search(r'\{.*\}', response.text, re.DOTALL)
                     if match:
                         data = json.loads(match.group(0))
-                        # Save to Archive
                         new_entry = {
                             "id": datetime.datetime.now().strftime("%Y%m%d-%H%M%S"),
                             "date": datetime.datetime.now().strftime("%d %b, %H:%M"),
@@ -170,7 +181,6 @@ else:
                         }
                         st.session_state.eval_history.append(new_entry)
                         st.session_state.current_eval = new_entry
-                        st.success("Analysis Complete & Archived!")
                     else: st.error("Neural data parse failed.")
                 except Exception as e: st.error(f"Scan Error: {e}")
 
@@ -183,7 +193,6 @@ else:
                     marked_img = draw_mark(marked_img, int((m['x']/1000)*img.width), int((m['y']/1000)*img.height), m['type'], i+1)
                 st.image(apply_logo(marked_img), use_column_width=True)
 
-    # --- REVISION & TUTOR MODULE ---
     elif menu == "REVISION HUB":
         st.title("🚨 REVISION & NEURAL TUTOR")
         if st.session_state.current_eval:
@@ -198,13 +207,12 @@ else:
                 user_q = st.chat_input("Ask about your marks...")
                 if user_q:
                     st.session_state.chat_history.append({"role": "user", "content": user_q})
-                    ctx = f"Context: Student failed {st.session_state.current_eval['data']['weaknesses']}. Help them as a teacher."
+                    ctx = f"Context: Student failed {st.session_state.current_eval['data']['weaknesses']}. Help them."
                     resp = client.models.generate_content(model=MODEL_ID, contents=[ctx, user_q])
                     st.session_state.chat_history.append({"role": "assistant", "content": resp.text})
                     st.rerun()
         else: st.info("Run a scan or select from Archive.")
 
-    # --- ARCHIVE MODULE ---
     elif menu == "NEURAL ARCHIVE":
         st.title("📂 NEURAL ARCHIVE")
         for i, item in enumerate(st.session_state.eval_history):
