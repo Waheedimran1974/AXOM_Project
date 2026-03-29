@@ -1,2 +1,2 @@
 poppler-utils
-freeglut3-dev libgl1-mesa-dev libglu1-mesa-dev libsm6 libxext6 libxrender-dev libosmesa6-dev poppler-utils
+libgl1
