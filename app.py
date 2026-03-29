@@ -9,7 +9,7 @@ from pdf2image import convert_from_bytes
 from fpdf import FPDF
 
 # --- 1. HUD & INTERFACE STYLING ---
-st.set_page_config(page_title="AXOM | GEMINI 2.5 PRO", layout="wide")
+st.set_page_config(page_title="AXOM | VISION AI", layout="wide")
 
 st.markdown("""
     <style>
@@ -36,12 +36,6 @@ st.markdown("""
         width: 100%; background: linear-gradient(90deg, #00e5ff, #007bff) !important; 
         color: #fff !important; font-weight: 900; border-radius: 4px; height: 50px; border: none;
     }
-    
-    .yt-launch-btn { 
-        display: inline-block; width: 100%; text-align: center; background: #ff0000; 
-        color: #ffffff !important; padding: 14px; border-radius: 6px; 
-        text-decoration: none; font-weight: 900; font-size: 1.1rem;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -51,7 +45,6 @@ try:
 except: 
     client = None
 
-# UPGRADED TO GEMINI 2.5
 MODEL_ID = "gemini-2.5-flash"
 
 def draw_mark(img, x, y, mark_type, index):
@@ -80,24 +73,19 @@ def apply_logo(img, logo_path="logo.jpg.png"):
         img.paste(logo, (img.width - logo.width - 40, img.height - logo.height - 40), logo)
     return img
 
-# --- 3. SESSION STATE ---
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "user_email" not in st.session_state:
-    st.session_state.user_email = ""
-if "eval_data" not in st.session_state:
-    st.session_state.eval_data = None
-if "pages" not in st.session_state:
-    st.session_state.pages = []
+# --- 3. LOGIN & SESSION SYSTEM ---
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "user_email" not in st.session_state: st.session_state.user_email = ""
+if "eval_data" not in st.session_state: st.session_state.eval_data = None
+if "pages" not in st.session_state: st.session_state.pages = []
 
-# --- 4. ACCESS CONTROL ---
 if not st.session_state.logged_in:
     _, col2, _ = st.columns([1, 2, 1])
     with col2:
         st.markdown('<div style="border:1px solid #00e5ff; padding:50px; border-radius:8px; background:rgba(0,10,20,0.9); text-align:center;">', unsafe_allow_html=True)
-        st.title("AXOM | NEURAL UPLINK")
-        u_email = st.text_input("CREDENTIALS (EMAIL)")
-        if st.button("AUTHENTICATE"):
+        st.title("AXOM | VISION LOGIN")
+        u_email = st.text_input("ACCESS EMAIL")
+        if st.button("INITIALIZE"):
             if "@" in u_email: 
                 st.session_state.user_email = u_email
                 st.session_state.logged_in = True
@@ -105,53 +93,48 @@ if not st.session_state.logged_in:
         st.markdown('</div>', unsafe_allow_html=True)
 else:
     with st.sidebar:
-        st.title("AXOM V5.5 PRO")
-        st.markdown(f"<span style='color:#00e5ff;'>● SESSION ACTIVE: {st.session_state.user_email}</span>", unsafe_allow_html=True)
+        st.title("AXOM V6.0 PRO")
+        st.markdown(f"<span style='color:#00e5ff;'>● {st.session_state.user_email}</span>", unsafe_allow_html=True)
         st.markdown("---")
-        menu = st.radio("SELECT PROTOCOL", ["NEURAL SCAN", "REVISION HUB"])
-        if st.button("TERMINATE"): 
+        menu = st.radio("INTERFACE", ["NEURAL SCAN", "REVISION HUB"])
+        if st.button("EXIT"): 
             st.session_state.logged_in = False
             st.rerun()
 
-    # --- SCANNER ---
+    # --- VISION SCANNER ---
     if menu == "NEURAL SCAN":
-        st.title("🧠 GEMINI 2.5 SCANNER")
+        st.title("🧠 VISION AI SCANNER")
         c1, c2 = st.columns(2)
         board, subj = c1.text_input("BOARD", "IGCSE"), c2.text_input("SUBJECT", "Physics")
-        up_s = st.file_uploader("UPLOAD SCRIPT (PDF)", type=['pdf'])
+        up_s = st.file_uploader("UPLOAD SCRIPT", type=['pdf'])
 
-        if up_s and st.button("RUN EVALUATION"):
-            with st.spinner("GEMINI 2.5 ANALYZING LOGIC & COORDINATES..."):
+        if up_s and st.button("EXECUTE NEURAL EVALUATION"):
+            with st.spinner("VISION AI ANALYZING GRAPHS & HANDWRITING..."):
                 try:
                     raw_pages = convert_from_bytes(up_s.read())
                     prompt = f"""
-                    You are a Senior Examiner for {board} {subj}.
-                    Evaluate this script according to the 2022 syllabus.
-                    
-                    CRITICAL RULES:
-                    1. Focus ONLY on logical reasoning and technical vocabulary.
-                    2. IGNORE capitalization, paragraphing, and punctuation. Do not deduct marks for these.
-                    3. If 'tick', the note MUST be exactly 'Correct'.
-                    4. If 'cross', provide a detailed explanation of the logic failure.
-                    5. 'direct_vid_url' must be a direct YouTube link for the specific weakness.
-                    6. The 'page' integer must match the 0-indexed page number of the image.
+                    You are a Senior Examiner for {board} {subj} (2022 Syllabus).
+                    ACTIVATE VISION SYSTEMS: 
+                    1. Analyze all handwriting, GRAPHS, DRAWINGS, and DIAGRAMS.
+                    2. Evaluate logical reasoning and technical accuracy of sketches.
+                    3. IGNORE mechanical errors (capitalization/paragraphs).
                     
                     Return ONLY JSON:
                     {{
                         "page_marks": [{{ "page": 0, "marks": [{{ "type": "tick"|"cross", "x": 0-1000, "y": 0-1000, "note": "...", "topic": "..." }}] }}],
                         "weaknesses": [{{ "topic": "...", "reason": "...", "direct_vid_url": "https://youtu.be/..." }}]
                     }}
+                    RULE: 'page' must be 0-indexed to match the page it was found on.
                     """
                     response = client.models.generate_content(model=MODEL_ID, contents=[prompt] + raw_pages)
                     match = re.search(r'\{.*\}', response.text, re.DOTALL)
                     if match:
                         st.session_state.eval_data = json.loads(match.group(0))
                         st.session_state.pages = raw_pages
-                        st.session_state.current_subj = subj
                     else:
-                        st.error("JSON Error: AI returned invalid format.")
+                        st.error("Vision data parse failed.")
                 except Exception as e:
-                    st.error(f"Neural Error: {e}")
+                    st.error(f"Scan Error: {e}")
 
         if st.session_state.eval_data:
             pdf = FPDF()
@@ -159,13 +142,12 @@ else:
                 st.markdown(f"### PAGE {idx+1}")
                 col_img, col_stickers = st.columns([3, 1])
                 
-                # Force strictly page-aligned marks
+                # PAGE ANCHORING LOGIC
                 marks = next((p['marks'] for p in st.session_state.eval_data['page_marks'] if p['page'] == idx), [])
                 marked_img = img.copy()
                 
                 with col_stickers:
-                    st.subheader("📌 Notes")
-                    if not marks: st.info("Clear Page")
+                    st.subheader("📌 Examiner Notes")
                     for i, m in enumerate(marks):
                         is_correct = m['type'] == 'tick'
                         style = "sticky-green" if is_correct else "sticky-red"
@@ -183,19 +165,14 @@ else:
                 os.remove(t_p)
             
             p_out = pdf.output(dest='S')
-            st.download_button("📩 DOWNLOAD MARKED PDF", data=p_out.encode('latin1') if isinstance(p_out, str) else bytes(p_out), file_name=f"AXOM_EVAL.pdf")
+            st.download_button("📩 EXTRACT FEEDBACK PDF", data=p_out.encode('latin1') if isinstance(p_out, str) else bytes(p_out), file_name="AXOM_EVAL.pdf")
 
-    # --- REVISION ---
     elif menu == "REVISION HUB":
-        st.title("🚨 TARGETED REVISION")
+        st.title("🚨 REVISION PATHWAYS")
         if st.session_state.eval_data:
             for item in st.session_state.eval_data.get('weaknesses', []):
                 st.markdown(f"""
                 <div class="red-alert-box">
                     <h2 style="color:#f44336; margin:0;">⚠️ TOPIC: {item['topic'].upper()}</h2>
                     <p style="color:#ccc; margin:10px 0;">{item['reason']}</p>
-                    <a href="{item['direct_vid_url']}" target="_blank" class="yt-launch-btn">▶ PLAY VIDEO LESSON</a>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("Neural scan required.")
+                    <a href="{item['direct_vid_url']}" target="_blank" style="background:#ff0000; color:#fff; padding:10px; display:block; text-align:center
