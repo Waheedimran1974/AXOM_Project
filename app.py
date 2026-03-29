@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 from pdf2image import convert_from_bytes
 from fpdf import FPDF
 
-# --- 1. HUD & HIGH-CONVERSION UI STYLING ---
+# --- 1. HUD & INTERFACE STYLING ---
 st.set_page_config(page_title="AXOM | VISION & REVENUE", layout="wide")
 
 st.markdown("""
@@ -82,44 +82,30 @@ if "current_eval" not in st.session_state: st.session_state.current_eval = None
 if "chat_history" not in st.session_state: st.session_state.chat_history = []
 if "show_sub" not in st.session_state: st.session_state.show_sub = False
 
-# --- 4. THE SUBSCRIPTION ENGINE (STREAMLINED) ---
+# --- 4. THE SUBSCRIPTION ENGINE (MONTHLY/WEEKLY/YEARLY/PAY-AS-YOU-GO) ---
 def show_subscription_plans():
-    st.title("SELECT YOUR ACCESS TIER:")
-    col1, col2 = st.columns(2)
+    st.title("SELECT ACCESS PLAN")
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.markdown("""
-        <div class="plan-card">
-            <h3>BASIC SCAN</h3>
-            <div class="price-tag">$9.99<span style="font-size:1rem;">/mo</span></div>
-            <div style="text-align:left; color:#00e5ff; font-size:0.9rem; margin:20px 0;">
-                ● 10 PDF Scans / Month<br>
-                ● 2022 Syllabus Logic<br>
-                ● Standard PDF Reports<br>
-            </div>
-        </div>""", unsafe_allow_html=True)
-        if st.button("ACTIVATE BASIC"): st.success("Redirecting to Secure Payment...")
+        st.markdown("""<div class="plan-card"><h3>WEEKLY</h3><div class="price-tag">$4.99<span style="font-size:1rem;">/wk</span></div>
+        <div style="text-align:left; color:#00e5ff; font-size:0.9rem; margin:20px 0;">● 7 Days Access<br>● Unlimited Scans<br>● AI Chat Tutor<br>● Vision AI Analysis</div></div>""", unsafe_allow_html=True)
+        if st.button("ACTIVATE WEEKLY"): st.success("Redirecting...")
 
     with col2:
-        st.markdown("""
-        <div class="plan-card" style="border-color:#ff0055;">
-            <div class="deal-badge">POPULAR</div>
-            <h3 style="color:#ff0055;">PRO EXAMINER</h3>
-            <div class="price-tag">$24.99<span style="font-size:1rem;">/mo</span></div>
-            <div style="text-align:left; color:#00e5ff; font-size:0.9rem; margin:20px 0;">
-                ● <b>UNLIMITED</b> Neural Scans<br>
-                ● <b>VISION AI</b> Graph Analysis<br>
-                ● <b>AI CHAT TUTOR</b> Access<br>
-                ● Custom Mark Scheme Uploads
-            </div>
-        </div>""", unsafe_allow_html=True)
-        if st.button("ACTIVATE PRO"): st.success("Activating Pro Neural Link...")
-    
-    st.markdown("---")
-    st.subheader("💎 EXCLUSIVE DEALS")
-    c1, c2 = st.columns(2)
-    c1.info("**Annual Legacy:** Pay for 10 months, get **2 MONTHS FREE**. Best for long-term IGCSE prep.")
-    c2.warning("**Family Bundle:** Connect two accounts for a **15% discount** on the second sub.")
+        st.markdown("""<div class="plan-card" style="border-color:#ff0055;"><div class="deal-badge">POPULAR</div><h3>MONTHLY</h3><div class="price-tag">$14.99<span style="font-size:1rem;">/mo</span></div>
+        <div style="text-align:left; color:#00e5ff; font-size:0.9rem; margin:20px 0;">● 30 Days Access<br>● Unlimited Scans<br>● AI Chat Tutor<br>● Vision AI Analysis</div></div>""", unsafe_allow_html=True)
+        if st.button("ACTIVATE MONTHLY"): st.success("Redirecting...")
+
+    with col3:
+        st.markdown("""<div class="plan-card"><h3>YEARLY</h3><div class="price-tag">$99.99<span style="font-size:1rem;">/yr</span></div>
+        <div style="text-align:left; color:#00e5ff; font-size:0.9rem; margin:20px 0;">● 365 Days Access<br>● Unlimited Scans<br>● AI Chat Tutor<br>● Vision AI Analysis</div></div>""", unsafe_allow_html=True)
+        if st.button("ACTIVATE YEARLY"): st.success("Redirecting...")
+
+    with col4:
+        st.markdown("""<div class="plan-card"><h3>PAY AS YOU GO</h3><div class="price-tag">$2.00<span style="font-size:1rem;">/paper</span></div>
+        <div style="text-align:left; color:#00e5ff; font-size:0.9rem; margin:20px 0;">● Single Paper Scan<br>● Full Logic Check<br>● PDF Feedback<br>● No Expiry</div></div>""", unsafe_allow_html=True)
+        if st.button("BUY CREDITS"): st.success("Redirecting...")
 
 # --- 5. APP EXECUTION FLOW ---
 if not st.session_state.logged_in:
@@ -136,7 +122,7 @@ if not st.session_state.logged_in:
         st.markdown('</div>', unsafe_allow_html=True)
 else:
     with st.sidebar:
-        st.title("AXOM V6.6 PRO")
+        st.title("AXOM V6.7 PRO")
         st.markdown(f"<span style='color:#00e5ff;'>● {st.session_state.user_email}</span>", unsafe_allow_html=True)
         if st.button("UPGRADE PLAN"): st.session_state.show_sub = True
         st.markdown("---")
@@ -147,7 +133,7 @@ else:
 
     if st.session_state.show_sub:
         show_subscription_plans()
-        if st.button("← BACK TO DASHBOARD"): 
+        if st.button("BACK TO DASHBOARD"): 
             st.session_state.show_sub = False
             st.rerun()
     
@@ -159,25 +145,21 @@ else:
         up_m = st.file_uploader("UPLOAD MARK SCHEME (OPTIONAL)", type=['pdf'])
 
         if up_s and st.button("EXECUTE NEURAL EVALUATION"):
-            with st.spinner("AI SCANNING..."):
+            with st.spinner("SCANNING..."):
                 try:
                     raw_pages = convert_from_bytes(up_s.read())
                     payload = ["Student Script:"] + raw_pages
                     ms_instr = "Use 2022 Syllabus."
                     if up_m:
                         payload += ["Mark Scheme Authority:"] + convert_from_bytes(up_m.read())
-                        ms_instr = "Use provided Mark Scheme as absolute authority."
+                        ms_instr = "Use provided Mark Scheme."
                     
                     prompt = f"Senior Examiner for {board} {subj}. {ms_instr} Analyze drawings. Ignore capitalization/paragraphs. Return JSON: {{'page_marks':[], 'weaknesses':[]}}"
                     response = client.models.generate_content(model=MODEL_ID, contents=[prompt] + payload)
                     match = re.search(r'\{.*\}', response.text, re.DOTALL)
                     if match:
                         data = json.loads(match.group(0))
-                        new_entry = {
-                            "id": datetime.datetime.now().strftime("%Y%m%d-%H%M%S"),
-                            "date": datetime.datetime.now().strftime("%d %b, %H:%M"),
-                            "subj": subj, "data": data, "pages": raw_pages
-                        }
+                        new_entry = {"id": datetime.datetime.now().strftime("%Y%m%d-%H%M%S"), "date": datetime.datetime.now().strftime("%d %b, %H:%M"), "subj": subj, "data": data, "pages": raw_pages}
                         st.session_state.eval_history.append(new_entry)
                         st.session_state.current_eval = new_entry
                     else: st.error("Neural data parse failed.")
@@ -193,13 +175,13 @@ else:
                 st.image(apply_logo(marked_img), use_column_width=True)
 
     elif menu == "REVISION HUB":
-        st.title("🚨 REVISION & NEURAL TUTOR")
+        st.title("REVISION & NEURAL TUTOR")
         if st.session_state.current_eval:
             t1, t2 = st.tabs(["GAPS & VIDEOS", "CHAT WITH TUTOR"])
             with t1:
                 for item in st.session_state.current_eval['data'].get('weaknesses', []):
                     st.markdown(f'<div class="red-alert-box"><b>{item["topic"].upper()}</b><br>{item["reason"]}</div>', unsafe_allow_html=True)
-                    st.link_button("▶ WATCH VIDEO LESSON", item["direct_vid_url"])
+                    st.link_button("WATCH VIDEO LESSON", item["direct_vid_url"])
             with t2:
                 for chat in st.session_state.chat_history:
                     st.markdown(f'<div class="{"user-bubble" if chat["role"]=="user" else "chat-bubble"}">{chat["content"]}</div>', unsafe_allow_html=True)
@@ -210,10 +192,9 @@ else:
                     resp = client.models.generate_content(model=MODEL_ID, contents=[ctx, user_q])
                     st.session_state.chat_history.append({"role": "assistant", "content": resp.text})
                     st.rerun()
-        else: st.info("Run a scan or select from Archive.")
 
     elif menu == "NEURAL ARCHIVE":
-        st.title("📂 NEURAL ARCHIVE")
+        st.title("NEURAL ARCHIVE")
         for i, item in enumerate(st.session_state.eval_history):
             with st.container():
                 st.markdown(f'<div style="border:1px solid #00e5ff; padding:15px; border-radius:10px; margin-bottom:10px;"><b>{item["subj"]}</b> | {item["date"]}</div>', unsafe_allow_html=True)
