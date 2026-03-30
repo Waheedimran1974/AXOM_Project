@@ -93,38 +93,52 @@ with st.sidebar:
     st.divider()
     st.info("Status: Online • Gemini 2.0 Flash Active")
 
-# --- 5. NEURAL GRADER PAGE ---
+# --- 5. NEURAL GRADER PAGE (Updated for Smart-Freemium) ---
 if menu == "NEURAL GRADER":
     st.title("🚀 Neural Script Analysis")
-    st.write("Upload your PDF script for PhD-level examiner feedback.")
     
     with st.container():
-        c1, c2 = st.columns(2)
-        board = c1.selectbox("EXAM BOARD", ["Cambridge IGCSE", "Edexcel", "AQA", "SAT"])
-        subject = c2.text_input("SUBJECT CODE", "English 0500 P1")
+        # ... (keep your existing uploaders) ...
         
-        up_script = st.file_uploader("UPLOAD STUDENT SCRIPT (PDF)", type=['pdf'])
-        up_scheme = st.file_uploader("MARKING SCHEME (OPTIONAL)", type=['pdf'])
-
         if up_script and st.button("EXECUTE CENSORA ENGINE"):
-            with st.status("Senior Examiner is cross-referencing your work...", expanded=True):
+            # Simulation of User Tier
+            user_is_pro = False # You can change this to True to test Pro mode
+            
+            with st.status("Senior Examiner is cross-referencing...", expanded=True):
                 pages = convert_pdf_to_images(up_script.read())
-                time.sleep(2.5)
+                time.sleep(2)
+                
+                # Logic: Pro gets all marks, Free gets Page 1 only
                 eval_data = {
-                    "score": 82 if up_scheme else 74,
-                    "summary": "Precise alignment with marking scheme detected. Excellent structure.",
-                    "marks": [{"page": 0, "x": 300, "y": 250, "correct": True, "note": "Strong Synthesis."}]
+                    "score": 82,
+                    "marks": [
+                        {"page": 0, "x": 300, "y": 250, "correct": True, "note": "Strong Thesis"},
+                        {"page": 1, "x": 200, "y": 400, "correct": False, "note": "Evidence Missing"}
+                    ]
                 }
-                st.session_state.current_eval = {"data": eval_data, "images": pages}
-                st.balloons()
+                st.session_state.current_eval = {"data": eval_data, "images": pages, "is_pro": user_is_pro}
 
     if st.session_state.current_eval:
         data = st.session_state.current_eval['data']
-        st.markdown(f"""<div class="bits-card"><h2 style="color:#00E5FF; margin:0;">FINAL SCORE: {data['score']}%</h2><p>{data['summary']}</p></div>""", unsafe_allow_html=True)
+        is_pro = st.session_state.current_eval['is_pro']
+        
+        # Display Only Page 1 Visuals for Free Users
         for i, img in enumerate(st.session_state.current_eval['images']):
-            marked_img = draw_bits_marks(img, [m for m in data['marks'] if m['page'] == i])
-            st.image(marked_img, caption=f"BITs Page {i+1}", use_column_width=True)
-
+            if i == 0 or is_pro:
+                p_marks = [m for m in data['marks'] if m['page'] == i]
+                marked_img = draw_bits_marks(img, p_marks)
+                st.image(marked_img, caption=f"BITs Page {i+1} (Visual Marking Active)")
+            else:
+                # The "Paywall" UI for subsequent pages
+                st.markdown(f"""
+                <div style="background:#111; padding:50px; border:2px dashed #333; text-align:center; border-radius:10px;">
+                    <h3 style="color:#00E5FF;">🔒 Page {i+1} Locked</h3>
+                    <p>Upgrade to <b>BITs Pro</b> to see full red-pen annotations for the entire script.</p>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"Unlock Page {i+1} & All Annotations", key=f"btn_{i}"):
+                    st.session_state.menu = "PRO SUBSCRIPTION"
+                    st.rerun()
 # --- 6. SUBSCRIPTION PLANS (THE "MONEY" PAGE) ---
 elif menu == "PRO SUBSCRIPTION":
     st.title("💎 Unlock Unlimited Potential")
